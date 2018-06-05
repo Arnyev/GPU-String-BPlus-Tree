@@ -5,15 +5,15 @@
 #include <ctype.h>
 #include <regex>
 #include <string>
+#include "Main.h"
 
 #define FILEPATH "book.txt"
 
 using namespace std;
+void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount, size_t wordArraySize);
 
-bool ReadFile()
+bool  ReadFileToBuffer(long &length, unsigned char * &buffer)
 {
-	unsigned char * buffer = 0;
-	long length;
 	FILE * f = fopen(FILEPATH, "rb");
 
 	if (!f)
@@ -30,7 +30,11 @@ bool ReadFile()
 		return false;
 
 	fclose(f);
+	return true;
+}
 
+int GetStartingPosition(unsigned char * buffer)
+{
 	int startingPosition = 0;
 	while (true)
 	{
@@ -40,18 +44,32 @@ bool ReadFile()
 		startingPosition++;
 	}
 
-	vector<int> wordPositions;
+	return startingPosition;
+}
+
+bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPositions, vector<int>& wordLengths, unsigned char *&h_wordArray, int& wordCount, int& charCount)
+{
+	unsigned char * buffer = 0;
+	long length;
+	if (!ReadFileToBuffer(length, buffer))
+		return false;
+
+	int startingPosition = GetStartingPosition(buffer);
+
 	wordPositions.push_back(0);
 	int writeIndex = 0;
+	int wordStart = 0;
 	bool currentlyOnNotAlphaSeq = false;
 	for (int i = startingPosition; i < length; i++)
 	{
 		unsigned char c = buffer[i];
 
-		if ((c > 64 && c < 91) || (c > 96 && c < 123))
+		if ((c > 64 && c < 91) || (c > 96 && c < 123))//is alpha
 		{
 			if (currentlyOnNotAlphaSeq)
 			{
+				wordLengths.push_back(writeIndex - wordStart);
+				wordStart = writeIndex;
 				wordPositions.push_back(writeIndex);
 				currentlyOnNotAlphaSeq = false;
 			}
@@ -65,14 +83,29 @@ bool ReadFile()
 			currentlyOnNotAlphaSeq = true;
 		}
 	}
+	wordLengths.push_back(writeIndex + 1 - wordStart);
+	buffer[writeIndex] = ' ';
+	h_wordPositions = wordPositions.data();
+	h_wordArray = buffer;
+	h_wordLengths = wordLengths.data();
+	wordCount = wordLengths.size();
+	charCount = writeIndex + 1;
 	return true;
 }
 
-
-
 int main(int argc, char **argv)
 {
+	vector<int> wordPositions;
+	vector<int> wordLengths;
+
 	findCudaDevice(argc, (const char **)argv);
-	ReadFile();
+	int* h_wordPositions;
+	int* h_wordLengths;
+	unsigned char *h_wordArray;
+	int wordCount;
+	int charCount;
+	ReadFile(h_wordPositions, h_wordLengths, wordPositions, wordLengths, h_wordArray, wordCount, charCount);
+
+	SortStrings(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
 }
 
