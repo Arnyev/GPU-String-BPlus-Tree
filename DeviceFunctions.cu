@@ -10,6 +10,7 @@ void __syncthreads();
 #include "thrust/sort.h"
 #include <thrust/execution_policy.h>
 #include "thrust/device_ptr.h"
+#include "bplus_tree_gpu.cuh"
 
 #define CHARSTOHASH 6
 #define ALPHABETSIZE 26

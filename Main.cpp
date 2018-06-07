@@ -6,6 +6,8 @@
 #include <regex>
 #include <string>
 #include "Main.h"
+#include "bplus_tree_gpu.cuh"
+#include "bplus_tree_cpu.h"
 
 #define FILEPATH "book.txt"
 
@@ -95,6 +97,18 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 
 int main(int argc, char **argv)
 {
+	//Sample creation of B+ tree
+	/* 
+	int i = 0;
+	int size = 64;
+	vector<int> v(size);
+	generate(v.begin(), v.end(), [&i]() -> int { return ++i; });
+	bplus_tree_gpu<int, 4> gt(v.data(), size);
+	bplus_tree_cpu<int, 4> ct(gt);
+	bplus_tree_cpu<int, 4> cte(v.begin(), v.end());
+	//ct and cte should be equal
+	*/
+
 	vector<int> wordPositions;
 	vector<int> wordLengths;
 
