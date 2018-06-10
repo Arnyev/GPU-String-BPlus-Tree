@@ -214,7 +214,7 @@ public:
 	int get_value(HASH key) override;
 	std::vector<int> get_value(HASH* keys, int size) override;
 
-	void insert(HASH key, int value) override;
+	bool insert(HASH key, int value) override;
 
 	void bulk_insert(HASH* keys, int* values, int size) override;
 };
@@ -356,7 +356,7 @@ std::vector<int> bplus_tree_gpu<HASH, B>::get_value(HASH* keys, int size)
 }
 
 template <class HASH, int B>
-void bplus_tree_gpu<HASH, B>::insert(HASH key, int value)
+bool bplus_tree_gpu<HASH, B>::insert(HASH key, int value)
 {
 	throw not_implemented();
 }

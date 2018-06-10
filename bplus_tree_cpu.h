@@ -5,19 +5,55 @@
 #include <algorithm>
 #include <iterator>
 #include "not_implemented.h"
+#include <array>
+
 
 template <class HASH, int B>
 class bplus_tree_cpu : public bplus_tree<HASH, B> 
 {
-	using index_array = int[B + 1];
-	using key_array = HASH[B];
-	index_array* indexesArray;
-	key_array* keysArray;
-	int* sizeArray;
+	const int EXTEND_SIZE = 16;
+	using index_array = std::array<int, B + 1>;
+	using key_array = std::array<HASH, B>;
+	std::vector<index_array> indexesArray;
+	std::vector<key_array> keysArray;
+	std::vector<int> sizeArray;
 	int reservedNodes;
 	int usedNodes;
 	int rootNodeIndex;
 	int height;
+
+	/**
+	 * \brief Creates a new node.
+	 * \return Index of a new node.
+	 */
+	int create_new_node();
+
+	/**
+	 * \brief Inserts key and value to node at given index by shifting elements to right
+	 * \param node Index of a node.
+	 * \param index Index where to insert.
+	 * \param key Key to insert.
+	 * \param value Value to insert.
+	 */
+	void insert_to_node_at(int node, int index, HASH key, int value);
+
+	/**
+	 * \brief Splits node from one level lower. The new created node contains greater elements.
+	 * \param nodeToSplit Index of a node to split.
+	 * \return Index of new created node.
+	 */
+	int split_node(int nodeToSplit);
+
+	/**
+	 * \brief 
+	 * \param key Key to insert.
+	 * \param value Value to insert.
+	 * \param node Index of next node.
+	 * \param height Height of next node.
+	 * \param success Is element was inserted?
+	 * \return Is node full?
+	 */
+	bool inner_insert(HASH key, int value, int node, int height, bool &success);
 protected:
 	void create_tree(HASH* keys, int* values, int size) override;
 
@@ -34,7 +70,7 @@ public:
 	int get_value(HASH key) override;
 	std::vector<int> get_value(HASH* keys, int size) override;
 
-	void insert(HASH key, int value) override;
+	bool insert(HASH key, int value) override;
 
 	void bulk_insert(HASH* keys, int* values, int size) override;
 };
@@ -50,9 +86,22 @@ std::vector<int> bplus_tree_cpu<HASH, B>::get_value(HASH* keys, int size)
 }
 
 template <class HASH, int B>
-void bplus_tree_cpu<HASH, B>::insert(HASH key, int value)
+bool bplus_tree_cpu<HASH, B>::insert(HASH key, int value)
 {
-	throw not_implemented();
+	bool success;
+	if (inner_insert(key, value, rootNodeIndex, 0, success))
+	{
+		//Need to add new node, increasing tree height
+		const int oldNode = rootNodeIndex;
+		const int newNode = split_node(rootNodeIndex);
+		rootNodeIndex = create_new_node();
+		keysArray[rootNodeIndex][0] = keysArray[newNode][0];
+		indexesArray[rootNodeIndex][0] = oldNode;
+		indexesArray[rootNodeIndex][1] = newNode;
+		sizeArray[rootNodeIndex] = 2;
+		height += 1;
+	}
+	return success;
 }
 
 template <class HASH, int B>
@@ -62,13 +111,118 @@ void bplus_tree_cpu<HASH, B>::bulk_insert(HASH* keys, int* values, int size)
 }
 
 template <class HASH, int B>
+int bplus_tree_cpu<HASH, B>::create_new_node()
+{
+	if (usedNodes == reservedNodes)
+	{
+		//No more space for nodes
+		//New memory is allocated
+		reservedNodes += EXTEND_SIZE;
+		indexesArray.resize(reservedNodes);
+		keysArray.resize(reservedNodes);
+		sizeArray.resize(reservedNodes);
+	}
+	int result = usedNodes;
+	usedNodes += 1;
+	return result;
+}
+
+template <class HASH, int B>
+void bplus_tree_cpu<HASH, B>::insert_to_node_at(int node, int index, HASH key, int value)
+{
+	const int size = sizeArray[node];
+	if (size == B)
+		throw std::logic_error("Cannot insert. Page is full.");
+	//Shifting elements one position to right
+	indexesArray[node][size + 1] = indexesArray[node][size];
+	for (int j = size; j > index; --j)
+	{
+		keysArray[node][j] = keysArray[node][j - 1];
+		indexesArray[node][j] = indexesArray[node][j - 1];
+	}
+	//Inserting new key and index
+	keysArray[node][index] = key;
+	indexesArray[node][index + 1] = value;
+	sizeArray[node] += 1;
+}
+
+template <class HASH, int B>
+int bplus_tree_cpu<HASH, B>::split_node(int nodeToSplit)
+{
+	const int newNode = create_new_node(); //New created node
+	//Copying elements to new node
+	for (int j = 0; j > B / 2; ++j)
+	{
+		keysArray[newNode][j] = keysArray[nodeToSplit][B / 2 + j];
+		indexesArray[newNode][j] = indexesArray[nodeToSplit][B / 2 + j];
+	}
+	//Setting size
+	sizeArray[newNode] = sizeArray[nodeToSplit] = B / 2;
+	//Adding indexes to next leaf currentNodes
+	indexesArray[newNode][B] = indexesArray[nodeToSplit][B];
+	indexesArray[nodeToSplit][B] = newNode;
+	return newNode;
+}
+
+template <class HASH, int B>
+bool bplus_tree_cpu<HASH, B>::inner_insert(HASH key, int value, int node, int height, bool &success)
+{
+	if (height == this->height)
+	{
+		//Leaf level
+		int i = 0;
+		const int size = sizeArray[node];
+		while (i < size && keysArray[node][i] <= key)
+		{
+			if (key == keysArray[node][i])
+			{
+				//Key exists
+				success = false;
+				return false;
+			}
+			++i;
+		}
+		const int target = i;
+		//Inserting new element to current node
+		insert_to_node_at(node, target, key, value);
+		success = true;
+		//Is need for a new node
+		return sizeArray[node] == B;
+	}
+	else
+	{
+		//Inner node level
+		const int size = sizeArray[node];
+		int i = 0;
+		while (i < size && keysArray[node][i] <= key)
+			++i;
+		if (!inner_insert(key, value, indexesArray[node][i], height + 1, success))
+		{
+			//Unsuccessful insertion, no futher actions
+			return false;
+		}
+		else
+		{
+			//Lower node is full and needs to be splited
+			const int targetIndex = i + 1;
+			const int oldNode = i;
+			//Spliting node
+			const int newNode = split_node(i);
+			//Inserting new element to current node
+			insert_to_node_at(node, targetIndex, keysArray[newNode][0], newNode);
+			return sizeArray[node] == B;
+		}
+	}
+}
+
+template <class HASH, int B>
 void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 {
 	reservedNodes = needed_nodes(size);
 
-	indexesArray = new index_array[reservedNodes];
-	keysArray = new key_array[reservedNodes];
-	sizeArray = new int[reservedNodes];
+	indexesArray = std::vector<index_array>(reservedNodes);
+	keysArray = std::vector<key_array>(reservedNodes);
+	sizeArray = std::vector<int>(reservedNodes);
 	int currentNode = 0; //Index of first not initilize node
 	int bottomPages = size * 2 / B;
 	int elementsOnLastPage = size - (bottomPages - 1) * B / 2;
@@ -79,8 +233,8 @@ void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 		height = 0;
 		rootNodeIndex = currentNode;
 		sizeArray[rootNodeIndex] = size;
-		std::copy(keys, values + size, keysArray[rootNodeIndex]);
-		std::copy(values, values + size, indexesArray[rootNodeIndex]);
+		std::copy(keys, values + size, keysArray[rootNodeIndex].begin());
+		std::copy(values, values + size, indexesArray[rootNodeIndex].begin());
 		currentNode += 1;
 	}
 	else //Not only root page
@@ -105,9 +259,9 @@ void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 				copyUntilV = itV + B / 2;
 				indexesArray[currentNode][B] = currentNode + 1; //Next page
 			}
-			std::copy(it, copyUntil, keysArray[currentNode]); //Copying hashes 
-			std::copy(itV, copyUntilV, indexesArray[currentNode]); //Copying values
-			sizeArray[currentNode] = std::distance(it, copyUntil);
+			std::copy(it, copyUntil, keysArray[currentNode].begin()); //Copying hashes 
+			std::copy(itV, copyUntilV, indexesArray[currentNode].begin()); //Copying values
+			sizeArray[currentNode] = static_cast<int>(std::distance(it, copyUntil));
 			it += B / 2;
 			itV += B / 2;
 			currentNode += 1;
@@ -187,13 +341,13 @@ bplus_tree_cpu<HASH, B>::bplus_tree_cpu(bplus_tree_gpu<HASH, B>& gpuTree)
 	reservedNodes = gpuTree.reservedNodes;
 	rootNodeIndex = gpuTree.rootNodeIndex;
 	usedNodes = gpuTree.usedNodes;
-	indexesArray = new index_array[reservedNodes];
-	keysArray = new key_array[reservedNodes];
-	sizeArray = new int[reservedNodes];
-	gpuErrchk(cudaMemcpy(indexesArray, gpuTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1),
+	indexesArray = std::vector<index_array>(reservedNodes);
+	keysArray = std::vector<key_array>(reservedNodes);
+	sizeArray = std::vector<int>(reservedNodes);
+	gpuErrchk(cudaMemcpy(indexesArray.data(), gpuTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1),
 		cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(keysArray, gpuTree.keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(sizeArray, gpuTree.sizeArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(keysArray.data(), gpuTree.keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(sizeArray.data(), gpuTree.sizeArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToHost));
 }
 
 template <class HASH, int B>
