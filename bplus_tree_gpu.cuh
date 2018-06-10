@@ -70,7 +70,7 @@ __global__ static void kernel_create_next_layer(const int threadsNum, const int 
 }
 
 template<class HASH, int B>
-__global__ void kernel_create_leafs(const int threadsNum, const int elementNum, HASH* hashesArray, HASH* keysArray, int* sizeArray, int* output)
+__global__ void kernel_create_leafs(const int threadsNum, const int elementNum, HASH* hashesArray, int* valueArray, HASH* keysArray, int* sizeArray, int* indexesArray, int* output)
 {
 	const int globalId = GetGlobalId();
 
@@ -89,12 +89,20 @@ __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, 
 			keysArray[id] = hashesArray[id];
 			id += threadsNum;
 		}
-		//TODO indexes should point to array of string
+		id = globalId;
+		while (id < elementNum)
+		{
+			indexesArray[id] = valueArray[id];
+			id += threadsNum;
+		}
+		if (globalId == 0)
+		{
+			indexesArray[B] = -1;
+		}
 		currentNode += 1;
 	}
 	else //Not only root page
 	{
-		HASH *it = hashesArray;
 		//Creation of leafs
 		int id = globalId;
 		//Copying elements to leaf pages
@@ -104,15 +112,18 @@ __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, 
 			const int offsetOnPage = id - skippedPages * (B / 2); //Offset on page
 			const int destination = skippedPages * B + offsetOnPage + (skippedPages == bottomPages ? -B : 0); /*Final destination where element must be copied.
 			If a number of skipped pages equals to a number of all leaf pages then destination is corrected by size of pages to insert elements to last page.*/
+			const int valuesDestination = skippedPages * (B + 1) + offsetOnPage + (skippedPages == bottomPages ? -(B + 1) : 0);
 			keysArray[destination] = hashesArray[id];
+			indexesArray[valuesDestination] = valueArray[id];
 			id += threadsNum;
 		}
 		id = globalId;
-		//Filling size of pages
+		//Filling size of pages and indexes to next leafs
 		while (id < bottomPages)
 		{
 			const int leftElements = elementNum - id * (B / 2);
 			sizeArray[id] = B / 2 + (leftElements < (B / 2) ? leftElements : 0);
+			indexesArray[id * (B + 1) + B] = id != (bottomPages - 1) ? id + 1 : -1;
 			id += threadsNum;
 		}
 	}
@@ -138,55 +149,85 @@ public:
 	int height;
 protected:
 public:
-	bplus_tree_gpu(HASH* hashes, int size)
-	{
-		height = 0;
-		int elementNum = size; //Number of hashes
-		reservedNodes = needed_nodes(elementNum);
-		HASH* d_hashes;
-		int* d_output;
-		output_create_leafs h_output_create_leafs;
-		gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
-		gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
-		gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
-		gpuErrchk(cudaMalloc(&d_hashes, size * sizeof(HASH)));
-		gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_leafs)));
-
-		gpuErrchk(cudaMemcpy(d_hashes, hashes, sizeof(HASH) * size, cudaMemcpyHostToDevice)); //Keys are copied to d_hashes
-
-		int threadsNum = 32;
-		kernel_create_leafs<HASH, B> kernel_init(threadsNum, 1) (threadsNum, elementNum, d_hashes, keysArray, sizeArray, d_output);
-		gpuErrchk(cudaGetLastError());
-
-		gpuErrchk(cudaMemcpy(&h_output_create_leafs, d_output, sizeof(output_create_leafs), cudaMemcpyDeviceToHost)); //Exctracting output
-		gpuErrchk(cudaFree(d_hashes));
-		gpuErrchk(cudaFree(d_output));
-		int beginIndex = 0;
-		int endIndex = h_output_create_leafs.usedNodes;
-		bool isRoot = h_output_create_leafs.isOnlyRoot != 0;
-		if (!isRoot)
-		{
-			output_create_next_layer h_output_create_next_layer;
-			gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_next_layer)));
-			while (!isRoot)
-			{
-				height += 1;
-				kernel_create_next_layer<HASH, B> kernel_init(threadsNum, 1) (threadsNum, beginIndex, endIndex, indexesArray, keysArray, sizeArray, d_output);
-				gpuErrchk(cudaGetLastError());
-				gpuErrchk(cudaMemcpy(&h_output_create_next_layer, d_output, sizeof(output_create_next_layer), cudaMemcpyDeviceToHost)); //Exctracting output
-				beginIndex = endIndex;
-				endIndex = h_output_create_next_layer.lastUsedIndex;
-				isRoot = h_output_create_next_layer.isRoot != 0;
-			}
-			gpuErrchk(cudaFree(d_output));
-		}
-		rootNodeIndex = endIndex - 1;
-		usedNodes = endIndex;
-	}
-	~bplus_tree_gpu()
-	{
-		gpuErrchk(cudaFree(indexesArray));
-		gpuErrchk(cudaFree(keysArray));
-		gpuErrchk(cudaFree(sizeArray));
-	}
+	bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree);
+	bplus_tree_gpu(HASH* hashes, int* values, int size);
+	~bplus_tree_gpu();
 };
+
+template <class HASH, int B>
+bplus_tree_gpu<HASH, B>::bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree)
+{
+	reservedNodes = gTree.reservedNodes;
+	usedNodes = gTree.usedNodes;
+	rootNodeIndex = gTree.rootNodeIndex;
+	height = gTree.height;
+	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
+	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
+	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
+	gpuErrchk(cudaMemcpy(indexesArray, gTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1), cudaMemcpyDeviceToDevice));
+	gpuErrchk(cudaMemcpy(keysArray, gTree.keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyDeviceToDevice));
+	gpuErrchk(cudaMemcpy(sizeArray, gTree.sizeArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToDevice));
+}
+
+template <class HASH, int B>
+bplus_tree_gpu<HASH, B>::bplus_tree_gpu(HASH* hashes, int* values, int size)
+{
+	height = 0;
+	int elementNum = size; //Number of hashes
+	reservedNodes = needed_nodes(elementNum);
+	HASH* d_hashes;
+	int* d_output;
+	int* d_values;
+	output_create_leafs h_output_create_leafs;
+	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
+	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
+	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
+	gpuErrchk(cudaMalloc(&d_hashes, size * sizeof(HASH)));
+	gpuErrchk(cudaMalloc(&d_values, size* sizeof(int)));
+	gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_leafs)));
+
+	gpuErrchk(cudaMemcpy(d_hashes, hashes, sizeof(HASH) * size, cudaMemcpyHostToDevice)); //Keys are copied to d_hashes
+	gpuErrchk(cudaMemcpy(d_values, values, sizeof(int) * size, cudaMemcpyHostToDevice)); //Values are copied to d_values
+
+	int threadsNum = 32;
+	//TODO set proper number of threads and blocks
+	kernel_create_leafs<HASH, B> kernel_init(threadsNum, 1) (threadsNum, elementNum, d_hashes, d_values, keysArray, sizeArray, indexesArray,
+	                                                         d_output);
+	gpuErrchk(cudaGetLastError());
+
+	gpuErrchk(cudaMemcpy(&h_output_create_leafs, d_output, sizeof(output_create_leafs), cudaMemcpyDeviceToHost));
+	//Exctracting output
+	gpuErrchk(cudaFree(d_hashes));
+	gpuErrchk(cudaFree(d_output));
+	int beginIndex = 0;
+	int endIndex = h_output_create_leafs.usedNodes;
+	bool isRoot = h_output_create_leafs.isOnlyRoot != 0;
+	if (!isRoot)
+	{
+		output_create_next_layer h_output_create_next_layer;
+		gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_next_layer)));
+		while (!isRoot)
+		{
+			height += 1;
+			kernel_create_next_layer<HASH, B> kernel_init(threadsNum, 1) (threadsNum, beginIndex, endIndex, indexesArray,
+			                                                              keysArray, sizeArray, d_output);
+			gpuErrchk(cudaGetLastError());
+			gpuErrchk(cudaMemcpy(&h_output_create_next_layer, d_output, sizeof(output_create_next_layer), cudaMemcpyDeviceToHost)
+			); //Exctracting output
+			beginIndex = endIndex;
+			endIndex = h_output_create_next_layer.lastUsedIndex;
+			isRoot = h_output_create_next_layer.isRoot != 0;
+		}
+		gpuErrchk(cudaFree(d_output));
+	}
+	rootNodeIndex = endIndex - 1;
+	usedNodes = endIndex;
+}
+
+template <class HASH, int B>
+bplus_tree_gpu<HASH, B>::~bplus_tree_gpu()
+{
+	gpuErrchk(cudaFree(indexesArray));
+	gpuErrchk(cudaFree(keysArray));
+	gpuErrchk(cudaFree(sizeArray));
+}
