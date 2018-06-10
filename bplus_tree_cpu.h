@@ -23,7 +23,23 @@ public:
 
 	template <class IteratorKeys, class IteratorValues>
 	bplus_tree_cpu(IteratorKeys firstKeys, IteratorKeys lastKeys, IteratorValues firstValues, IteratorValues lastValues);
+
+	bool exist(HASH key) override;
+	std::vector<bool> exist(HASH* keys, int size) override;
+
+	int get_value(HASH key) override;
+	std::vector<int> get_value(HASH* keys, int size) override;
 };
+
+template <class HASH, int B>
+std::vector<int> bplus_tree_cpu<HASH, B>::get_value(HASH* keys, int size)
+{
+	std::vector<int> tmp(size);
+	auto it = tmp.begin();
+	for (int i = 0; i < size; ++i, ++it)
+		*it = get_value(keys[i]);
+	return tmp;
+}
 
 template <class HASH, int B>
 bplus_tree_cpu<HASH, B>::bplus_tree_cpu(bplus_tree_gpu<HASH, B>& gpuTree)
@@ -86,7 +102,7 @@ bplus_tree_cpu<HASH, B>::bplus_tree_cpu(IteratorKeys firstKeys, IteratorKeys las
 	}
 	else //Not only root page
 	{
-		height = 1;
+		height = 0;
 		IteratorKeys it = firstKeys;
 		IteratorValues itV = firstValues;
 		//Creation of leafs
@@ -146,6 +162,7 @@ bplus_tree_cpu<HASH, B>::bplus_tree_cpu(IteratorKeys firstKeys, IteratorKeys las
 		}
 		//Root creation
 		{
+			height += 1;
 			rootNodeIndex = currentNode;
 			indexesArray[rootNodeIndex][0] = firstNode;
 			for (int j = firstNode + 1, x = 0; j < lastNode; ++j, ++x)
@@ -158,4 +175,47 @@ bplus_tree_cpu<HASH, B>::bplus_tree_cpu(IteratorKeys firstKeys, IteratorKeys las
 		}
 	}
 	usedNodes = currentNode - 1;
+}
+
+template <class HASH, int B>
+bool bplus_tree_cpu<HASH, B>::exist(HASH key)
+{
+	return get_value(key) >= 0;
+}
+
+template <class HASH, int B>
+std::vector<bool> bplus_tree_cpu<HASH, B>::exist(HASH* keys, int size)
+{
+	auto values = get_value(keys, size);
+	std::vector<bool> tmp(size);
+	std::transform(values.begin(), values.end(), tmp.begin(), [](int i) -> bool {return i >= 0; });
+	return tmp;
+}
+
+template <class HASH, int B>
+int bplus_tree_cpu<HASH, B>::get_value(HASH key)
+{
+	int currentHeight = 0;
+	int currentNode = rootNodeIndex;
+	int i;
+	//Inner nodes
+	while (currentHeight < height)
+	{
+		const int size = sizeArray[currentNode];
+		i = 0;
+		while (i < size && keysArray[currentNode][i] <= key)
+			++i;
+		currentNode = indexesArray[currentNode][i];
+		++currentHeight;
+	}
+	//Leaf level
+	i = 0;
+	const int size = sizeArray[currentNode];
+	while (i < size && keysArray[currentNode][i] <= key)
+	{
+		if (key == keysArray[currentNode][i])
+			return indexesArray[currentNode][i];
+		++i;
+	}
+	return -1;
 }

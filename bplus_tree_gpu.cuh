@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 #include "bplus_tree.h"
 #include "gpu_helper.cuh"
 
@@ -16,7 +17,7 @@ struct output_create_next_layer
 };
 
 template<class HASH, int B>
-__global__ static void kernel_create_next_layer(const int threadsNum, const int beginIndex, const int endIndex, int* indexArray, HASH* keysArray, int* sizeArray, int* output)
+__global__ void kernel_create_next_layer(const int threadsNum, const int beginIndex, const int endIndex, int* indexArray, HASH* keysArray, int* sizeArray, int* output)
 {
 	const int globalId = GetGlobalId();
 	const int minIndexesPerNode = B / 2 + 1;
@@ -136,6 +137,58 @@ __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, 
 	}
 }
 
+template<class HASH, int B, class Output>
+__global__ void kernel_get_value(const int threadsNum, const int elementNum, HASH* keysArray, int* sizeArray, int* indexesArray, HASH* toFind, int height, int rootIndex, Output* output)
+{
+	const int globalId = GetGlobalId();
+	const int sizeOfSizeNode = 1;
+	const int sizeOfKeyNode = B;
+	const int sizeOfIndexNode = B + 1;
+	int currentHeight = 0;
+	int currentNode = rootIndex;
+	int i;
+	int id = globalId;
+	while (id < elementNum)
+	{
+		const HASH key = toFind[id];
+		//Inner nodes
+		while (currentHeight < height)
+		{
+			const int size = sizeArray[currentNode * sizeOfSizeNode];
+			i = 0;
+			while (i < size && keysArray[currentNode * sizeOfKeyNode + i] <= key)
+				++i;
+			currentNode = indexesArray[currentNode * sizeOfIndexNode + i];
+			++currentHeight;
+		}
+		//Leaf level
+		i = 0;
+		const int size = sizeArray[currentNode * sizeOfSizeNode];
+		int found = 0;
+		while (i < size && keysArray[currentNode * sizeOfKeyNode + i] <= key)
+		{
+			if (key == keysArray[currentNode * sizeOfKeyNode + i])
+			{
+				if (std::is_same<Output, bool>::value)
+					reinterpret_cast<bool*>(output)[id] = true;
+				else
+					output[id] = indexesArray[currentNode * sizeOfIndexNode + i];
+				found = 1;
+				break;
+			}
+			++i;
+		}
+		if (found == 0)
+		{
+			if (std::is_same<Output, bool>::value)
+				reinterpret_cast<bool*>(output)[id] = false;
+			else
+				output[id] = -1;
+		}
+		id += threadsNum;
+	}
+}
+
 template <class HASH, int B>
 class bplus_tree_gpu : public bplus_tree<HASH, B>
 {
@@ -152,6 +205,12 @@ public:
 	bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree);
 	bplus_tree_gpu(HASH* hashes, int* values, int size);
 	~bplus_tree_gpu();
+
+	bool exist(HASH key) override;
+	std::vector<bool> exist(HASH* keys, int size) override;
+
+	int get_value(HASH key) override;
+	std::vector<int> get_value(HASH* keys, int size) override;
 };
 
 template <class HASH, int B>
@@ -230,4 +289,56 @@ bplus_tree_gpu<HASH, B>::~bplus_tree_gpu()
 	gpuErrchk(cudaFree(indexesArray));
 	gpuErrchk(cudaFree(keysArray));
 	gpuErrchk(cudaFree(sizeArray));
+}
+
+template <class HASH, int B>
+bool bplus_tree_gpu<HASH, B>::exist(HASH key)
+{
+	return exist(&key, 1)[0];
+}
+
+template <class HASH, int B>
+std::vector<bool> bplus_tree_gpu<HASH, B>::exist(HASH* keys, int size)
+{
+	HASH* d_keys;
+	bool *output = new bool[size];
+	bool* d_output;
+	gpuErrchk(cudaMalloc(&d_keys, size * sizeof(HASH)));
+	gpuErrchk(cudaMalloc(&d_output, size * sizeof(bool)));
+	gpuErrchk(cudaMemcpy(d_keys, keys, size * sizeof(HASH), cudaMemcpyHostToDevice));
+
+	const int threadsNum = 32;
+	kernel_get_value<HASH, B> kernel_init(threadsNum, 1) (threadsNum, size, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
+	gpuErrchk(cudaGetLastError());
+
+	gpuErrchk(cudaMemcpy(output, d_output, size * sizeof(bool), cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaFree(d_output));
+	gpuErrchk(cudaFree(d_keys));
+	return std::vector<bool>(output, output + size);
+}
+
+template <class HASH, int B>
+int bplus_tree_gpu<HASH, B>::get_value(HASH key)
+{
+	return get_value(&key, 1)[0];
+}
+
+template <class HASH, int B>
+std::vector<int> bplus_tree_gpu<HASH, B>::get_value(HASH* keys, int size)
+{
+	HASH* d_keys;
+	std::vector<int> output(size);
+	int* d_output;
+	gpuErrchk(cudaMalloc(&d_keys, size * sizeof(HASH)));
+	gpuErrchk(cudaMalloc(&d_output, size * sizeof(int)));
+	gpuErrchk(cudaMemcpy(d_keys, keys, size * sizeof(HASH), cudaMemcpyHostToDevice));
+
+	const int threadsNum = 32;
+	kernel_get_value<HASH, B> kernel_init(threadsNum, 1) (threadsNum, size, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
+	gpuErrchk(cudaGetLastError());
+
+	gpuErrchk(cudaMemcpy(output.data(), d_output, size * sizeof(int), cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaFree(d_output));
+	gpuErrchk(cudaFree(d_keys));
+	return output;
 }
