@@ -98,7 +98,6 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 int main(int argc, char **argv)
 {
 	//Sample creation of B+ tree
-	/*
 	int i = 0;
 	int size = 64;
 	vector<int> keys(size);
@@ -108,12 +107,11 @@ int main(int argc, char **argv)
 	generate(values.begin(), values.end(), [&i]() -> int { return ++i; });
 	bplus_tree_gpu<int, 4> gt(keys.data(), values.data(), size);
 	bplus_tree_cpu<int, 4> ct(gt);
-	bplus_tree_cpu<int, 4> cte(keys.begin(), keys.end(), values.begin(), values.end());
+	bplus_tree_cpu<int, 4> cte(keys.data(), values.data(), size);
 	int toFind[] = { 1, 2, 0, -1, 64, 65, 3 };
 	auto z1 = ct.get_value(toFind, sizeof(toFind) / sizeof(int));
 	auto z2 = cte.get_value(toFind, sizeof(toFind) / sizeof(int));
 	auto z3 = gt.get_value(toFind, sizeof(toFind) / sizeof(int));
-	*/
 	//ct and cte should be equal
 
 	vector<int> wordPositions;

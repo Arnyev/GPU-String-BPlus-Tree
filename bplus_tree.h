@@ -4,22 +4,10 @@
 template<class HASH, int B>
 class bplus_tree
 {
-private:
-	int inner_needed(int elemNum)
-	{
-		if (elemNum < B)
-			return 1;
-		int fullPages = elemNum / (B / 2 + 1);
-		return fullPages + inner_needed(fullPages);
-	}
 protected:
-	int needed_nodes(int elemNum)
-	{
-		if (elemNum < B)
-			return 1;
-		int fullPages = elemNum * 2 / B;
-		return fullPages + inner_needed(fullPages);
-	}
+	static int needed_nodes(int elemNum);
+
+	void virtual create_tree(HASH* keys, int* values, int size) = 0;
 public:
 	virtual ~bplus_tree() = default;
 
@@ -28,4 +16,21 @@ public:
 
 	int virtual get_value(HASH key) = 0;
 	std::vector<int> virtual get_value(HASH* keys, int size) = 0;
+
+	void virtual insert(HASH key, int value) = 0;
+
+	void virtual bulk_insert(HASH* keys, int* values, int size) = 0;
 };
+
+template <class HASH, int B>
+int bplus_tree<HASH, B>::needed_nodes(int elemNum)
+{
+	int pages = 0;
+	while (elemNum > B)
+	{
+		elemNum = elemNum * 2 / B;
+		pages += elemNum;
+	}
+	pages += 1;
+	return pages;
+}

@@ -4,6 +4,7 @@
 #include "gpu_helper.cuh"
 #include <algorithm>
 #include <iterator>
+#include "not_implemented.h"
 
 template <class HASH, int B>
 class bplus_tree_cpu : public bplus_tree<HASH, B> 
@@ -17,18 +18,25 @@ class bplus_tree_cpu : public bplus_tree<HASH, B>
 	int usedNodes;
 	int rootNodeIndex;
 	int height;
+protected:
+	void create_tree(HASH* keys, int* values, int size) override;
+
+	int get_leaf(HASH key);
 public:
 	bplus_tree_cpu(bplus_tree_gpu<HASH, B>& gpu_tree);
 	bplus_tree_gpu<HASH, B> export_to_gpu();
 
-	template <class IteratorKeys, class IteratorValues>
-	bplus_tree_cpu(IteratorKeys firstKeys, IteratorKeys lastKeys, IteratorValues firstValues, IteratorValues lastValues);
+	bplus_tree_cpu(HASH* keys, int* values, int size);
 
 	bool exist(HASH key) override;
 	std::vector<bool> exist(HASH* keys, int size) override;
 
 	int get_value(HASH key) override;
 	std::vector<int> get_value(HASH* keys, int size) override;
+
+	void insert(HASH key, int value) override;
+
+	void bulk_insert(HASH* keys, int* values, int size) override;
 };
 
 template <class HASH, int B>
@@ -42,78 +50,53 @@ std::vector<int> bplus_tree_cpu<HASH, B>::get_value(HASH* keys, int size)
 }
 
 template <class HASH, int B>
-bplus_tree_cpu<HASH, B>::bplus_tree_cpu(bplus_tree_gpu<HASH, B>& gpuTree)
+void bplus_tree_cpu<HASH, B>::insert(HASH key, int value)
 {
-	height = gpuTree.height;
-	reservedNodes = gpuTree.reservedNodes;
-	rootNodeIndex = gpuTree.rootNodeIndex;
-	usedNodes = gpuTree.usedNodes;
-	indexesArray = new index_array[reservedNodes];
-	keysArray = new key_array[reservedNodes];
-	sizeArray = new int[reservedNodes];
-	gpuErrchk(cudaMemcpy(indexesArray, gpuTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1),
-		cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(keysArray, gpuTree.keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(sizeArray, gpuTree.sizeArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToHost));
+	throw not_implemented();
 }
 
 template <class HASH, int B>
-bplus_tree_gpu<HASH, B> bplus_tree_cpu<HASH, B>::export_to_gpu()
+void bplus_tree_cpu<HASH, B>::bulk_insert(HASH* keys, int* values, int size)
 {
-	bplus_tree_gpu<HASH, B> gTree;
-	gTree.height = height;
-	gTree.reservedNodes = reservedNodes;
-	gTree.rootNodeIndex = rootNodeIndex;
-	gTree.usedNodes = usedNodes;
-	gpuErrchk(cudaMalloc(&gTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
-	gpuErrchk(cudaMalloc(&gTree.keysArray, reservedNodes * sizeof(HASH) * B));
-	gpuErrchk(cudaMalloc(&gTree.sizeArray, reservedNodes * sizeof(int)));
-	gpuErrchk(cudaMemcpy(gTree.indexesArray, indexesArray, reservedNodes * sizeof(HASH) * (B + 1),
-		cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMemcpy(gTree.keysArray, keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMemcpy(gTree.sizeArray, sizeArray, reservedNodes * sizeof(int), cudaMemcpyHostToDevice));
-	return gTree;
+	throw not_implemented();
 }
 
 template <class HASH, int B>
-template <class IteratorKeys, class IteratorValues>
-bplus_tree_cpu<HASH, B>::bplus_tree_cpu(IteratorKeys firstKeys, IteratorKeys lastKeys, IteratorValues firstValues, IteratorValues lastValues)
+void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 {
-	int elementNum = lastKeys - firstKeys; //Number of hashes
-	//reservedNodes = std::max(static_cast<double>(1), log(elementNum) / log(B));
-	reservedNodes = needed_nodes(elementNum);
+	reservedNodes = needed_nodes(size);
 
 	indexesArray = new index_array[reservedNodes];
 	keysArray = new key_array[reservedNodes];
 	sizeArray = new int[reservedNodes];
 	int currentNode = 0; //Index of first not initilize node
-	int bottomPages = elementNum * 2 / B;
-	int elementsOnLastPage = elementNum - (bottomPages - 1) * B / 2;
+	int bottomPages = size * 2 / B;
+	int elementsOnLastPage = size - (bottomPages - 1) * B / 2;
 	if (elementsOnLastPage < B / 2) //If elements on last page are less then half size of page
 		bottomPages -= 1;
 	if (bottomPages == 0) //Only root page
 	{
 		height = 0;
 		rootNodeIndex = currentNode;
-		sizeArray[rootNodeIndex] = elementNum;
-		std::copy(firstKeys, lastKeys, keysArray[rootNodeIndex]);
-		std::copy(firstValues, lastValues, indexesArray[rootNodeIndex]);
+		sizeArray[rootNodeIndex] = size;
+		std::copy(keys, values + size, keysArray[rootNodeIndex]);
+		std::copy(values, values + size, indexesArray[rootNodeIndex]);
 		currentNode += 1;
 	}
 	else //Not only root page
 	{
 		height = 0;
-		IteratorKeys it = firstKeys;
-		IteratorValues itV = firstValues;
+		HASH* it = keys;
+		int* itV = values;
 		//Creation of leafs
 		for (int i = 0; i < bottomPages; ++i)
 		{
-			IteratorKeys copyUntil;
-			IteratorValues copyUntilV;
+			HASH* copyUntil;
+			int* copyUntilV;
 			if (i == bottomPages - 1) //Last page
 			{
-				copyUntil = lastKeys;
-				copyUntilV = lastValues;
+				copyUntil = keys + size;
+				copyUntilV = values + size;
 				indexesArray[currentNode][B] = -1; //There is no next page
 			}
 			else
@@ -178,6 +161,66 @@ bplus_tree_cpu<HASH, B>::bplus_tree_cpu(IteratorKeys firstKeys, IteratorKeys las
 }
 
 template <class HASH, int B>
+int bplus_tree_cpu<HASH, B>::get_leaf(HASH key)
+{
+	int currentHeight = 0;
+	int currentNode = rootNodeIndex;
+	int i;
+	//Inner nodes
+	while (currentHeight < height)
+	{
+		const int size = sizeArray[currentNode];
+		i = 0;
+		while (i < size && keysArray[currentNode][i] <= key)
+			++i;
+		currentNode = indexesArray[currentNode][i];
+		++currentHeight;
+	}
+	//Leaf level
+	return currentNode;
+}
+
+template <class HASH, int B>
+bplus_tree_cpu<HASH, B>::bplus_tree_cpu(bplus_tree_gpu<HASH, B>& gpuTree)
+{
+	height = gpuTree.height;
+	reservedNodes = gpuTree.reservedNodes;
+	rootNodeIndex = gpuTree.rootNodeIndex;
+	usedNodes = gpuTree.usedNodes;
+	indexesArray = new index_array[reservedNodes];
+	keysArray = new key_array[reservedNodes];
+	sizeArray = new int[reservedNodes];
+	gpuErrchk(cudaMemcpy(indexesArray, gpuTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1),
+		cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(keysArray, gpuTree.keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(sizeArray, gpuTree.sizeArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToHost));
+}
+
+template <class HASH, int B>
+bplus_tree_gpu<HASH, B> bplus_tree_cpu<HASH, B>::export_to_gpu()
+{
+	bplus_tree_gpu<HASH, B> gTree;
+	gTree.height = height;
+	gTree.reservedNodes = reservedNodes;
+	gTree.rootNodeIndex = rootNodeIndex;
+	gTree.usedNodes = usedNodes;
+	gpuErrchk(cudaMalloc(&gTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
+	gpuErrchk(cudaMalloc(&gTree.keysArray, reservedNodes * sizeof(HASH) * B));
+	gpuErrchk(cudaMalloc(&gTree.sizeArray, reservedNodes * sizeof(int)));
+	gpuErrchk(cudaMemcpy(gTree.indexesArray, indexesArray, reservedNodes * sizeof(HASH) * (B + 1),
+		cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(gTree.keysArray, keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(gTree.sizeArray, sizeArray, reservedNodes * sizeof(int), cudaMemcpyHostToDevice));
+	return gTree;
+}
+
+template <class HASH, int B>
+bplus_tree_cpu<HASH, B>::bplus_tree_cpu(HASH* keys, int* values, int size)
+{
+	create_tree(keys, values, size);
+}
+
+template <class HASH, int B>
 bool bplus_tree_cpu<HASH, B>::exist(HASH key)
 {
 	return get_value(key) >= 0;
@@ -195,21 +238,9 @@ std::vector<bool> bplus_tree_cpu<HASH, B>::exist(HASH* keys, int size)
 template <class HASH, int B>
 int bplus_tree_cpu<HASH, B>::get_value(HASH key)
 {
-	int currentHeight = 0;
-	int currentNode = rootNodeIndex;
-	int i;
-	//Inner nodes
-	while (currentHeight < height)
-	{
-		const int size = sizeArray[currentNode];
-		i = 0;
-		while (i < size && keysArray[currentNode][i] <= key)
-			++i;
-		currentNode = indexesArray[currentNode][i];
-		++currentHeight;
-	}
+	const int currentNode = get_leaf(key);
 	//Leaf level
-	i = 0;
+	int i = 0;
 	const int size = sizeArray[currentNode];
 	while (i < size && keysArray[currentNode][i] <= key)
 	{

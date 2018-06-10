@@ -2,6 +2,7 @@
 #include <vector>
 #include "bplus_tree.h"
 #include "gpu_helper.cuh"
+#include "not_implemented.h"
 
 struct output_create_leafs
 {
@@ -201,6 +202,7 @@ public:
 	int rootNodeIndex;
 	int height;
 protected:
+	void create_tree(HASH* hashes, int* values, int size) override;
 public:
 	bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree);
 	bplus_tree_gpu(HASH* hashes, int* values, int size);
@@ -211,7 +213,66 @@ public:
 
 	int get_value(HASH key) override;
 	std::vector<int> get_value(HASH* keys, int size) override;
+
+	void insert(HASH key, int value) override;
+
+	void bulk_insert(HASH* keys, int* values, int size) override;
 };
+
+template <class HASH, int B>
+void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size)
+{
+	height = 0;
+	int elementNum = size; //Number of hashes
+	reservedNodes = needed_nodes(size);
+	HASH* d_hashes;
+	int* d_output;
+	int* d_values;
+	output_create_leafs h_output_create_leafs;
+	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
+	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
+	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
+	gpuErrchk(cudaMalloc(&d_hashes, size * sizeof(HASH)));
+	gpuErrchk(cudaMalloc(&d_values, size* sizeof(int)));
+	gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_leafs)));
+
+	gpuErrchk(cudaMemcpy(d_hashes, hashes, sizeof(HASH) * size, cudaMemcpyHostToDevice)); //Keys are copied to d_hashes
+	gpuErrchk(cudaMemcpy(d_values, values, sizeof(int) * size, cudaMemcpyHostToDevice)); //Values are copied to d_values
+
+	int threadsNum = elementNum < 1024 ? elementNum : 1024;
+	int blocksNum = elementNum < 1024 ? 1 : static_cast<int>(std::ceil(elementNum / 1024.f));
+	kernel_create_leafs<HASH, B> kernel_init(threadsNum, blocksNum) (threadsNum, elementNum, d_hashes, d_values, keysArray,
+	                                                                 sizeArray, indexesArray, d_output);
+	gpuErrchk(cudaGetLastError());
+
+	gpuErrchk(cudaMemcpy(&h_output_create_leafs, d_output, sizeof(output_create_leafs), cudaMemcpyDeviceToHost));
+	//Exctracting output
+	gpuErrchk(cudaFree(d_hashes));
+	gpuErrchk(cudaFree(d_output));
+	int beginIndex = 0;
+	int endIndex = h_output_create_leafs.usedNodes;
+	bool isRoot = h_output_create_leafs.isOnlyRoot != 0;
+	if (!isRoot)
+	{
+		output_create_next_layer h_output_create_next_layer;
+		gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_next_layer)));
+		while (!isRoot)
+		{
+			height += 1;
+			kernel_create_next_layer<HASH, B> kernel_init(threadsNum, blocksNum) (
+				threadsNum, beginIndex, endIndex, indexesArray, keysArray, sizeArray, d_output);
+			gpuErrchk(cudaGetLastError());
+			gpuErrchk(cudaMemcpy(&h_output_create_next_layer, d_output, sizeof(output_create_next_layer), cudaMemcpyDeviceToHost)
+			); //Exctracting output
+			beginIndex = endIndex;
+			endIndex = h_output_create_next_layer.lastUsedIndex;
+			isRoot = h_output_create_next_layer.isRoot != 0;
+		}
+		gpuErrchk(cudaFree(d_output));
+	}
+	rootNodeIndex = endIndex - 1;
+	usedNodes = endIndex;
+}
 
 template <class HASH, int B>
 bplus_tree_gpu<HASH, B>::bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree)
@@ -231,56 +292,7 @@ bplus_tree_gpu<HASH, B>::bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree)
 template <class HASH, int B>
 bplus_tree_gpu<HASH, B>::bplus_tree_gpu(HASH* hashes, int* values, int size)
 {
-	height = 0;
-	int elementNum = size; //Number of hashes
-	reservedNodes = needed_nodes(elementNum);
-	HASH* d_hashes;
-	int* d_output;
-	int* d_values;
-	output_create_leafs h_output_create_leafs;
-	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
-	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
-	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
-	gpuErrchk(cudaMalloc(&d_hashes, size * sizeof(HASH)));
-	gpuErrchk(cudaMalloc(&d_values, size* sizeof(int)));
-	gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_leafs)));
-
-	gpuErrchk(cudaMemcpy(d_hashes, hashes, sizeof(HASH) * size, cudaMemcpyHostToDevice)); //Keys are copied to d_hashes
-	gpuErrchk(cudaMemcpy(d_values, values, sizeof(int) * size, cudaMemcpyHostToDevice)); //Values are copied to d_values
-
-	int threadsNum = 32;
-	//TODO set proper number of threads and blocks
-	kernel_create_leafs<HASH, B> kernel_init(threadsNum, 1) (threadsNum, elementNum, d_hashes, d_values, keysArray, sizeArray, indexesArray,
-	                                                         d_output);
-	gpuErrchk(cudaGetLastError());
-
-	gpuErrchk(cudaMemcpy(&h_output_create_leafs, d_output, sizeof(output_create_leafs), cudaMemcpyDeviceToHost));
-	//Exctracting output
-	gpuErrchk(cudaFree(d_hashes));
-	gpuErrchk(cudaFree(d_output));
-	int beginIndex = 0;
-	int endIndex = h_output_create_leafs.usedNodes;
-	bool isRoot = h_output_create_leafs.isOnlyRoot != 0;
-	if (!isRoot)
-	{
-		output_create_next_layer h_output_create_next_layer;
-		gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_next_layer)));
-		while (!isRoot)
-		{
-			height += 1;
-			kernel_create_next_layer<HASH, B> kernel_init(threadsNum, 1) (threadsNum, beginIndex, endIndex, indexesArray,
-			                                                              keysArray, sizeArray, d_output);
-			gpuErrchk(cudaGetLastError());
-			gpuErrchk(cudaMemcpy(&h_output_create_next_layer, d_output, sizeof(output_create_next_layer), cudaMemcpyDeviceToHost)
-			); //Exctracting output
-			beginIndex = endIndex;
-			endIndex = h_output_create_next_layer.lastUsedIndex;
-			isRoot = h_output_create_next_layer.isRoot != 0;
-		}
-		gpuErrchk(cudaFree(d_output));
-	}
-	rootNodeIndex = endIndex - 1;
-	usedNodes = endIndex;
+	create_tree(hashes, values, size);
 }
 
 template <class HASH, int B>
@@ -341,4 +353,22 @@ std::vector<int> bplus_tree_gpu<HASH, B>::get_value(HASH* keys, int size)
 	gpuErrchk(cudaFree(d_output));
 	gpuErrchk(cudaFree(d_keys));
 	return output;
+}
+
+template <class HASH, int B>
+void bplus_tree_gpu<HASH, B>::insert(HASH key, int value)
+{
+	throw not_implemented();
+}
+
+template <class HASH, int B>
+void bplus_tree_gpu<HASH, B>::bulk_insert(HASH* keys, int* values, int size)
+{
+	throw not_implemented();
+	//Assumption that new and old keys are unique
+	//TODO merge keys and values
+	HASH* newKeys;
+	int* newValues;
+	int newSize;
+	create_tree(newKeys, newValues, newSize);
 }
