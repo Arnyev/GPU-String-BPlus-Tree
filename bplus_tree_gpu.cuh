@@ -3,6 +3,7 @@
 #include "bplus_tree.h"
 #include "gpu_helper.cuh"
 #include "not_implemented.h"
+#include <helper_math.h>
 
 struct output_create_leafs
 {
@@ -18,7 +19,7 @@ struct output_create_next_layer
 };
 
 template<class HASH, int B>
-__global__ void kernel_create_next_layer(const int threadsNum, const int beginIndex, const int endIndex, int* indexArray, HASH* keysArray, int* sizeArray, int* output)
+__global__ void kernel_create_next_layer(const int threadsNum, const int beginIndex, const int endIndex, int* indexArray, HASH* keysArray, int* sizeArray, int *minArray, int* output)
 {
 	const int globalId = GetGlobalId();
 	const int minIndexesPerNode = B / 2 + 1;
@@ -27,7 +28,7 @@ __global__ void kernel_create_next_layer(const int threadsNum, const int beginIn
 	const int maxKeysPerNode = B;
 	int createdNodes = endIndex - beginIndex; //How many nodes were last time created
 	//Creation of new layer
-	int toCreate = createdNodes / (B / 2 + 1); //How many nodes will be created
+	int toCreate = max(createdNodes / (B / 2 + 1), 1); //How many nodes will be created
 	//In each node there will be at least B / 2 keys and B / 2 + 1 indexes to lower layer nodes
 	int id = globalId;
 	while (id < createdNodes)
@@ -61,6 +62,7 @@ __global__ void kernel_create_next_layer(const int threadsNum, const int beginIn
 	{
 		const int leftElements = createdNodes - id * (minKeysPerNode + 1);
 		sizeArray[endIndex + id] = leftElements <= maxIndexesPerNode ? leftElements - 1 : minKeysPerNode;
+		minArray[endIndex + id] = minArray[indexArray[(endIndex + id) * maxIndexesPerNode]];
 		id += threadsNum;
 	}
 	//Output
@@ -72,7 +74,7 @@ __global__ void kernel_create_next_layer(const int threadsNum, const int beginIn
 }
 
 template<class HASH, int B>
-__global__ void kernel_create_leafs(const int threadsNum, const int elementNum, HASH* hashesArray, int* valueArray, HASH* keysArray, int* sizeArray, int* indexesArray, int* output)
+__global__ void kernel_create_leafs(const int threadsNum, const int elementNum, HASH* hashesArray, int* valueArray, HASH* keysArray, int* sizeArray, int* indexesArray, int* minArray, int* output)
 {
 	const int globalId = GetGlobalId();
 
@@ -83,8 +85,6 @@ __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, 
 		bottomPages -= 1;
 	if (bottomPages == 0) //Only root page
 	{
-		if (globalId == 0)
-			sizeArray[currentNode] = elementNum;
 		int id = globalId;
 		while (id < elementNum)
 		{
@@ -100,6 +100,8 @@ __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, 
 		if (globalId == 0)
 		{
 			indexesArray[B] = -1;
+			sizeArray[currentNode] = elementNum;
+			minArray[currentNode] = keysArray[currentNode * B];
 		}
 		currentNode += 1;
 	}
@@ -125,6 +127,7 @@ __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, 
 		{
 			const int leftElements = elementNum - id * (B / 2);
 			sizeArray[id] = B / 2 + (leftElements < (B / 2) ? leftElements : 0);
+			minArray[id] = keysArray[id * B];
 			indexesArray[id * (B + 1) + B] = id != (bottomPages - 1) ? id + 1 : -1;
 			id += threadsNum;
 		}
@@ -197,6 +200,7 @@ public:
 	int* indexesArray;
 	HASH* keysArray;
 	int* sizeArray;
+	int* minArray;
 	int reservedNodes;
 	int usedNodes;
 	int rootNodeIndex;
@@ -232,6 +236,7 @@ void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size)
 	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
 	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
 	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
+	gpuErrchk(cudaMalloc(&minArray, reservedNodes * sizeof(int)));
 	gpuErrchk(cudaMalloc(&d_hashes, size * sizeof(HASH)));
 	gpuErrchk(cudaMalloc(&d_values, size* sizeof(int)));
 	gpuErrchk(cudaMalloc(&d_output, sizeof(output_create_leafs)));
@@ -242,7 +247,7 @@ void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size)
 	int threadsNum = elementNum < 1024 ? elementNum : 1024;
 	int blocksNum = elementNum < 1024 ? 1 : static_cast<int>(std::ceil(elementNum / 1024.f));
 	kernel_create_leafs<HASH, B> kernel_init(threadsNum, blocksNum) (threadsNum, elementNum, d_hashes, d_values, keysArray,
-	                                                                 sizeArray, indexesArray, d_output);
+	                                                                 sizeArray, indexesArray, minArray, d_output);
 	gpuErrchk(cudaGetLastError());
 
 	gpuErrchk(cudaMemcpy(&h_output_create_leafs, d_output, sizeof(output_create_leafs), cudaMemcpyDeviceToHost));
@@ -260,7 +265,7 @@ void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size)
 		{
 			height += 1;
 			kernel_create_next_layer<HASH, B> kernel_init(threadsNum, blocksNum) (
-				threadsNum, beginIndex, endIndex, indexesArray, keysArray, sizeArray, d_output);
+				threadsNum, beginIndex, endIndex, indexesArray, keysArray, sizeArray, minArray, d_output);
 			gpuErrchk(cudaGetLastError());
 			gpuErrchk(cudaMemcpy(&h_output_create_next_layer, d_output, sizeof(output_create_next_layer), cudaMemcpyDeviceToHost)
 			); //Exctracting output
@@ -287,6 +292,7 @@ bplus_tree_gpu<HASH, B>::bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree)
 	gpuErrchk(cudaMemcpy(indexesArray, gTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1), cudaMemcpyDeviceToDevice));
 	gpuErrchk(cudaMemcpy(keysArray, gTree.keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyDeviceToDevice));
 	gpuErrchk(cudaMemcpy(sizeArray, gTree.sizeArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToDevice));
+	gpuErrchk(cudaMemcpy(minArray, gTree.minArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToDevice));
 }
 
 template <class HASH, int B>
@@ -301,6 +307,7 @@ bplus_tree_gpu<HASH, B>::~bplus_tree_gpu()
 	gpuErrchk(cudaFree(indexesArray));
 	gpuErrchk(cudaFree(keysArray));
 	gpuErrchk(cudaFree(sizeArray));
+	gpuErrchk(cudaFree(minArray));
 }
 
 template <class HASH, int B>

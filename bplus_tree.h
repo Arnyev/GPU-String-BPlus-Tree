@@ -26,10 +26,13 @@ public:
 template <class HASH, int B>
 int bplus_tree<HASH, B>::needed_nodes(int elemNum)
 {
-	int pages = 0;
+	if (elemNum < B)
+		return 1;
+	int pages = elemNum * 2 / B;
+	elemNum = pages;
 	while (elemNum > B)
 	{
-		elemNum = elemNum * 2 / B;
+		elemNum = elemNum / (B / 2 + 1);
 		pages += elemNum;
 	}
 	pages += 1;
