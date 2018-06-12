@@ -3,7 +3,6 @@
 #include "bplus_tree.h"
 #include "gpu_helper.cuh"
 #include "not_implemented.h"
-#include <helper_math.h>
 
 struct output_create_leafs
 {
@@ -221,6 +220,8 @@ public:
 	bool insert(HASH key, int value) override;
 
 	void bulk_insert(HASH* keys, int* values, int size) override;
+
+	int get_height() override;
 };
 
 template <class HASH, int B>
@@ -378,4 +379,10 @@ void bplus_tree_gpu<HASH, B>::bulk_insert(HASH* keys, int* values, int size)
 	int* newValues;
 	int newSize;
 	create_tree(newKeys, newValues, newSize);
+}
+
+template <class HASH, int B>
+int bplus_tree_gpu<HASH, B>::get_height()
+{
+	return height;
 }

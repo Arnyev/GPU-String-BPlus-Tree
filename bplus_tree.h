@@ -21,6 +21,8 @@ public:
 	bool virtual insert(HASH key, int value) = 0;
 
 	void virtual bulk_insert(HASH* keys, int* values, int size) = 0;
+
+	int virtual get_height() = 0;
 };
 
 template <class HASH, int B>

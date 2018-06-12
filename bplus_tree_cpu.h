@@ -1,13 +1,5 @@
 ﻿#pragma once
 
-#if _DEBUG
-
-#define CLEAR_MEMORY true
-
-#define DEFAULT_MEMORY_VALUE (-1)
-
-#endif
-
 #include "bplus_tree.h"
 #include "bplus_tree_gpu.cuh"
 #include "gpu_helper.cuh"
@@ -15,7 +7,6 @@
 #include <iterator>
 #include "not_implemented.h"
 #include <array>
-
 
 template <class HASH, int B>
 class bplus_tree_cpu : public bplus_tree<HASH, B> 
@@ -31,7 +22,6 @@ class bplus_tree_cpu : public bplus_tree<HASH, B>
 	int usedNodes;
 	int rootNodeIndex;
 	int height;
-	
 
 	/**
 	 * \brief Inserts a new element to a node. Splits if necessery and returns in reference parameters values of newly craeted node.
@@ -74,15 +64,6 @@ class bplus_tree_cpu : public bplus_tree<HASH, B>
 	void insert_to_node_after(HASH key, int value, int node, int target);
 
 	/**
-	 * \brief Splits node from one level lower. The new created node contains greater elements.
-	 * \tparam IsLeafNode Is insertion happening on leaf node.
-	 * \param nodeToSplit Index of a node to split.
-	 * \return Index of new created node.
-	 */
-	template <bool IsLeafNode>
-	int split_node(int nodeToSplit);
-
-	/**
 	 * \brief 
 	 * \param key Key to insert.
 	 * \param value Value to insert.
@@ -111,6 +92,8 @@ public:
 	bool insert(HASH key, int value) override;
 
 	void bulk_insert(HASH* keys, int* values, int size) override;
+
+	int get_height() override;
 };
 
 template <class HASH, int B>
@@ -147,6 +130,12 @@ template <class HASH, int B>
 void bplus_tree_cpu<HASH, B>::bulk_insert(HASH* keys, int* values, int size)
 {
 	throw not_implemented();
+}
+
+template <class HASH, int B>
+int bplus_tree_cpu<HASH, B>::get_height()
+{
+	return height;
 }
 
 template <class HASH, int B>
@@ -314,42 +303,6 @@ void bplus_tree_cpu<HASH, B>::insert_to_node_after(HASH key, int value, int node
 }
 
 template <class HASH, int B>
-template <bool IsLeafNode>
-int bplus_tree_cpu<HASH, B>::split_node(int nodeToSplit)
-{
-	const int newNode = create_new_node(); //New created node
-	//Copying elements to a new node
-	for (int j = 0; j < B / 2; ++j)
-	{
-		keysArray[newNode][j] = keysArray[nodeToSplit][B / 2 + j];
-		indexesArray[newNode][j] = indexesArray[nodeToSplit][B / 2 + j];
-	}
-	if (IsLeafNode)
-	{
-		indexesArray[newNode][B] = indexesArray[nodeToSplit][B];
-		indexesArray[nodeToSplit][B] = newNode;
-	}
-	else
-	{
-		indexesArray[newNode][B / 2] = indexesArray[nodeToSplit][B];
-	}
-#if _DEBUG
-	for (int j = B / 2; j < B; ++j)
-	{
-		keysArray[newNode][j] = -1;
-		indexesArray[newNode][j] = -1;
-		keysArray[nodeToSplit][j] = -1;
-		indexesArray[nodeToSplit][j] = -1;
-	}
-#endif
-
-	//Setting size
-	sizeArray[newNode] = B / 2;
-	sizeArray[nodeToSplit] = B / 2;
-	return newNode;
-}
-
-template <class HASH, int B>
 bool bplus_tree_cpu<HASH, B>::inner_insert(HASH& key, int& value, int node, int height, bool &success)
 {
 	if (height == this->height)
@@ -403,20 +356,20 @@ void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 	keysArray = std::vector<key_array>(reservedNodes);
 	sizeArray = std::vector<int>(reservedNodes);
 	minArray = std::vector<int>(reservedNodes);
-	int currentNode = 0; //Index of first not initilize node
-	int bottomPages = size * 2 / B;
+	int node = 0; //Index of first not initilize node
+	int bottomPages = std::max(1, size * 2 / B);
 	int elementsOnLastPage = size - (bottomPages - 1) * B / 2;
 	if (elementsOnLastPage < B / 2) //If elements on last page are less then half size of page
 		bottomPages -= 1;
-	if (bottomPages == 0) //Only root page
+	if (bottomPages <= 1) //Only root page
 	{
 		height = 0;
-		rootNodeIndex = currentNode;
+		rootNodeIndex = node;
 		sizeArray[rootNodeIndex] = size;
-		std::copy(keys, values + size, keysArray[rootNodeIndex].begin());
+		std::copy(keys, keys + size, keysArray[rootNodeIndex].begin());
 		std::copy(values, values + size, indexesArray[rootNodeIndex].begin());
 		minArray[rootNodeIndex] = keysArray[rootNodeIndex][0];
-		currentNode += 1;
+		node += 1;
 	}
 	else //Not only root page
 	{
@@ -432,26 +385,26 @@ void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 			{
 				copyUntil = keys + size;
 				copyUntilV = values + size;
-				indexesArray[currentNode][B] = -1; //There is no next page
+				indexesArray[node][B] = -1; //There is no next page
 			}
 			else
 			{
 				copyUntil = it + B / 2;
 				copyUntilV = itV + B / 2;
-				indexesArray[currentNode][B] = currentNode + 1; //Next page
+				indexesArray[node][B] = node + 1; //Next page
 			}
-			std::copy(it, copyUntil, keysArray[currentNode].begin()); //Copying hashes 
-			std::copy(itV, copyUntilV, indexesArray[currentNode].begin()); //Copying values
-			sizeArray[currentNode] = static_cast<int>(std::distance(it, copyUntil));
-			minArray[currentNode] = keysArray[currentNode][0];
+			std::copy(it, copyUntil, keysArray[node].begin()); //Copying hashes 
+			std::copy(itV, copyUntilV, indexesArray[node].begin()); //Copying values
+			sizeArray[node] = static_cast<int>(std::distance(it, copyUntil));
+			minArray[node] = keysArray[node][0];
 			it += B / 2;
 			itV += B / 2;
-			currentNode += 1;
+			node += 1;
 		}
 		int firstNode = 0; //First index of nodes from previous layer
-		int lastNode = currentNode; //Index after last used page
+		int lastNode = node; //Index after last used page
 		int createdNodes = bottomPages; //How many nodes were created
-		while (createdNodes > B) //If all indexes doesn't fit inside one node, new layer is required
+		while (createdNodes > B + 1) //If all indexes doesn't fit inside one node, new layer is required
 		{
 			//Creation of new layer
 			height += 1; //Height of a tree is increasing
@@ -465,37 +418,37 @@ void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 					thisNodeIndexesEnd = lastNode;
 				else
 					thisNodeIndexesEnd = thisNodeIndexesBegin + B / 2 + 1;
-				indexesArray[currentNode][0] = thisNodeIndexesBegin;
+				indexesArray[node][0] = thisNodeIndexesBegin;
 				for (int j = thisNodeIndexesBegin + 1, x = 0; j < thisNodeIndexesEnd; ++j, ++x)
 				{
-					keysArray[currentNode][x] = keysArray[j][0];
-					indexesArray[currentNode][x + 1] = j;
+					indexesArray[node][x + 1] = j;
+					keysArray[node][x] = minArray[j];
 				}
-				sizeArray[currentNode] = thisNodeIndexesEnd - thisNodeIndexesBegin - 1;
-				minArray[currentNode] = minArray[indexesArray[currentNode][0]];
+				sizeArray[node] = thisNodeIndexesEnd - thisNodeIndexesBegin - 1;
+				minArray[node] = minArray[indexesArray[node][0]];
 				thisNodeIndexesBegin += B / 2 + 1;
-				currentNode += 1;
+				node += 1;
 			}
 			createdNodes = toCreate;
 			firstNode = lastNode;
-			lastNode = currentNode;
+			lastNode = node;
 		}
 		//Root creation
 		{
 			height += 1;
-			rootNodeIndex = currentNode;
+			rootNodeIndex = node;
 			indexesArray[rootNodeIndex][0] = firstNode;
 			for (int j = firstNode + 1, x = 0; j < lastNode; ++j, ++x)
 			{
-				keysArray[rootNodeIndex][x] = keysArray[j][0];
 				indexesArray[rootNodeIndex][x + 1] = j;
+				keysArray[rootNodeIndex][x] = minArray[j];
 			}
 			sizeArray[rootNodeIndex] = lastNode - firstNode - 1;
-			minArray[rootNodeIndex] = minArray[indexesArray[currentNode][0]];
-			currentNode += 1;
+			minArray[rootNodeIndex] = minArray[indexesArray[node][0]];
+			node += 1;
 		}
 	}
-	usedNodes = currentNode - 1;
+	usedNodes = node - 1;
 }
 
 template <class HASH, int B>

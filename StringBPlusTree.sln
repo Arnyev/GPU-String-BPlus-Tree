@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.27130.2036
+VisualStudioVersion = 15.0.27130.2027
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StringBPlusTree", "StringBPlusTree.vcxproj", "{22828AC0-F62B-4F9F-B915-9CD73E209BCE}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnitTests", "UnitTests\UnitTests.vcxproj", "{9C36FAF7-32DE-4FD9-B366-109F4C880113}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{22828AC0-F62B-4F9F-B915-9CD73E209BCE}.Debug|x64.Build.0 = Debug|x64
 		{22828AC0-F62B-4F9F-B915-9CD73E209BCE}.Release|x64.ActiveCfg = Release|x64
 		{22828AC0-F62B-4F9F-B915-9CD73E209BCE}.Release|x64.Build.0 = Release|x64
+		{9C36FAF7-32DE-4FD9-B366-109F4C880113}.Debug|x64.ActiveCfg = Debug|x64
+		{9C36FAF7-32DE-4FD9-B366-109F4C880113}.Debug|x64.Build.0 = Debug|x64
+		{9C36FAF7-32DE-4FD9-B366-109F4C880113}.Release|x64.ActiveCfg = Release|x64
+		{9C36FAF7-32DE-4FD9-B366-109F4C880113}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
