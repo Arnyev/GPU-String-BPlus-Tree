@@ -1,4 +1,6 @@
-#ifndef BOOST_ENABLE
+#ifdef BOOST_ENABLE
+#include <boost/test/unit_test.hpp>
+#else
 #include <iostream>
 
 int main()

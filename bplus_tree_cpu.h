@@ -60,10 +60,10 @@ class bplus_tree_cpu : public bplus_tree<HASH, B>
 	 * \param key Key to insert.
 	 * \param value Value to insert.
 	 * \param node Index of a node.
-	 * \param target Index where to insert.
+	 * \param after Index where to insert.
 	 */
 	template <bool IsLeafNode>
-	void insert_to_node_after(HASH key, int value, int node, int target);
+	void insert_to_node_after(HASH key, int value, int node, int after);
 
 	/**
 	 * \brief 

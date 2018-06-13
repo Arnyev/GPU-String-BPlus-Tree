@@ -1,5 +1,6 @@
 #include "../bplus_tree_cpu.h"
 #ifdef BOOST_ENABLE
+#define BOOST_TEST_MODULE BPlusTreeTests
 #include <boost/test/unit_test.hpp>
 
 using HASH = int;
@@ -41,7 +42,7 @@ bool check_if_all_key_exists(bplus_tree_cpu<HASH, PageSize> &tree, std::vector<t
 	return true;
 }
 
-BOOST_AUTO_TEST_CASE(insertion_to_root_without_node_spliting)
+BOOST_AUTO_TEST_CASE(cpu_insertion_to_root_without_node_spliting)
 {
 	const int PAGE_SIZE = 16;
 	const int INITIAL_SIZE = 12;
@@ -65,7 +66,7 @@ BOOST_AUTO_TEST_CASE(insertion_to_root_without_node_spliting)
 	}
 }
 
-BOOST_AUTO_TEST_CASE(insertion_to_root_with_node_spliting)
+BOOST_AUTO_TEST_CASE(cpu_insertion_to_root_with_node_spliting)
 {
 	const int PAGE_SIZE = 16;
 	const int INITIAL_SIZE = 14;
@@ -96,7 +97,7 @@ BOOST_AUTO_TEST_CASE(insertion_to_root_with_node_spliting)
 	}
 }
 
-BOOST_AUTO_TEST_CASE(insertion_to_leaf)
+BOOST_AUTO_TEST_CASE(cpu_insertion_to_leaf)
 {
 	const int PAGE_SIZE = 16;
 	const int INITIAL_SIZE = 250;

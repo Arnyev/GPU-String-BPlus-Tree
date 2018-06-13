@@ -2,16 +2,25 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="tree_construction.cpp">
-      <Filter>bplus_tree_cpu_tests</Filter>
-    </ClCompile>
     <ClCompile Include="insertion.cpp">
       <Filter>bplus_tree_cpu_tests</Filter>
+    </ClCompile>
+    <ClCompile Include="tree_construction_cpu.cpp">
+      <Filter>bplus_tree_cpu_tests</Filter>
+    </ClCompile>
+    <ClCompile Include="tree_construction_gpu.cpp">
+      <Filter>bplus_tree_gpu_tests</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="bplus_tree_cpu_tests">
       <UniqueIdentifier>{bd709a38-45e6-4723-8b2e-1828541023f5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="bplus_tree_gpu_tests">
+      <UniqueIdentifier>{3ae166bd-4adb-4aea-af17-8c26c4e2e550}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="templates_init.cu" />
   </ItemGroup>
 </Project>

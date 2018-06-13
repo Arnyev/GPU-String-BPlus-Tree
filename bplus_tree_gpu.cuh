@@ -3,6 +3,7 @@
 #include "bplus_tree.h"
 #include "gpu_helper.cuh"
 #include "not_implemented.h"
+#include <cassert>
 
 struct output_create_leafs
 {
@@ -20,38 +21,32 @@ struct output_create_next_layer
 template<class HASH, int B>
 __global__ void kernel_create_next_layer(const int threadsNum, const int beginIndex, const int endIndex, int* indexArray, HASH* keysArray, int* sizeArray, int *minArray, int* output)
 {
+	only_gpu_assert();
 	const int globalId = GetGlobalId();
 	const int minIndexesPerNode = B / 2 + 1;
 	const int maxIndexesPerNode = B + 1;
 	const int minKeysPerNode = B / 2;
 	const int maxKeysPerNode = B;
-	int createdNodes = endIndex - beginIndex; //How many nodes were last time created
+	const int createdNodes = endIndex - beginIndex; //How many nodes were last time created
 	//Creation of new layer
-	int toCreate = max(createdNodes / (B / 2 + 1), 1); //How many nodes will be created
+	int toCreate = my_max(1, createdNodes / (B / 2 + 1)); //How many nodes will be created in this iteration
+	if (toCreate <= 0)
+		toCreate = 1;
 	//In each node there will be at least B / 2 keys and B / 2 + 1 indexes to lower layer nodes
 	int id = globalId;
 	while (id < createdNodes)
 	{
-		//Each thread serve one node from previous layer
-		const int relativeNode = id / minIndexesPerNode; //Relative number of a current node
-		const bool isMerge = relativeNode == toCreate && toCreate > 1; //Is current value gonna be merge to previous node
-		const int absoluteNode = endIndex + relativeNode + (isMerge ? -1 : 0);
-		/* Absolute number of a current node. If it is not root node (toCreate > 1) and relative number of a node exceeds number of nodes to create
-		 * (relativeNode == toCreate, because realativeNode starts from 0), then absolute index is decreased by 1 due to merge of the nodes.
-		 */
-		const int nodeOffset = id - relativeNode * minIndexesPerNode + (isMerge ? minIndexesPerNode : 0); //Offset on the current node
-		const int lowerNodeIndex = beginIndex + id; //Index of a lower node
-		//Writes indexes from one level bellow to nodes
+		int _nodeNumber = id / minIndexesPerNode;
+		const bool addToPrevious = _nodeNumber == toCreate;
+		_nodeNumber += addToPrevious ? -1 : 0;
+		const int& nodeNumber = _nodeNumber;
+		const int nodeIndex = endIndex + nodeNumber;
+		const int indexInNode = id - nodeNumber * minIndexesPerNode;
+		const int lowerNode = beginIndex + id;
+		indexArray[nodeIndex * maxIndexesPerNode + indexInNode] = lowerNode;
+		if (indexInNode != 0)
 		{
-			const int target = absoluteNode * maxIndexesPerNode + nodeOffset;
-			indexArray[target] = lowerNodeIndex;
-		}
-		//Writes keys from one level bellow to nodes
-		if (nodeOffset != 0)
-		{
-			const int target = absoluteNode * maxKeysPerNode + nodeOffset - 1;
-			const int source = lowerNodeIndex * maxKeysPerNode;
-			keysArray[target] = keysArray[source];
+			keysArray[nodeIndex * maxKeysPerNode + indexInNode - 1] = minArray[lowerNode];
 		}
 		id += threadsNum;
 	}
@@ -59,9 +54,12 @@ __global__ void kernel_create_next_layer(const int threadsNum, const int beginIn
 	id = globalId;
 	while (id < toCreate)
 	{
-		const int leftElements = createdNodes - id * (minKeysPerNode + 1);
-		sizeArray[endIndex + id] = leftElements <= maxIndexesPerNode ? leftElements - 1 : minKeysPerNode;
-		minArray[endIndex + id] = minArray[indexArray[(endIndex + id) * maxIndexesPerNode]];
+		const int &nodeNumber = id;
+		const int nodeIndex = endIndex + nodeNumber;
+		const bool isLast = nodeNumber == toCreate - 1;
+		const int firstLowerNode = beginIndex + id * minIndexesPerNode;
+		sizeArray[nodeIndex] = isLast ? createdNodes - (toCreate - 1) * minIndexesPerNode - 1 : minKeysPerNode;
+		minArray[nodeIndex] = minArray[firstLowerNode];
 		id += threadsNum;
 	}
 	//Output
@@ -75,118 +73,97 @@ __global__ void kernel_create_next_layer(const int threadsNum, const int beginIn
 template<class HASH, int B>
 __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, HASH* hashesArray, int* valueArray, HASH* keysArray, int* sizeArray, int* indexesArray, int* minArray, int* output)
 {
+	only_gpu_assert();
 	const int globalId = GetGlobalId();
-
-	int currentNode = 0; //Index of first not initilize node
-	int bottomPages = elementNum * 2 / B;
-	int elementsOnLastPage = elementNum - (bottomPages - 1) * B / 2;
-	if (elementsOnLastPage < B / 2) //If elements on last page are less then half size of page
+	const int maxIndexesPerNode = B + 1;
+	const int minKeysPerNode = B / 2;
+	const int maxKeysPerNode = B;
+	int bottomPages = my_max(1, elementNum * 2 / B); //How many pages will be created
+	const int elementsOnLastPage = elementNum - (bottomPages - 1) * B / 2;
+	if (elementsOnLastPage < B / 2 && bottomPages > 1) //If elements on last page are less then half size of page
 		bottomPages -= 1;
-	if (bottomPages == 0) //Only root page
+	int id = globalId;
+	while (id < elementNum)
 	{
-		int id = globalId;
-		while (id < elementNum)
-		{
-			keysArray[id] = hashesArray[id];
-			id += threadsNum;
-		}
-		id = globalId;
-		while (id < elementNum)
-		{
-			indexesArray[id] = valueArray[id];
-			id += threadsNum;
-		}
-		if (globalId == 0)
-		{
-			indexesArray[B] = -1;
-			sizeArray[currentNode] = elementNum;
-			minArray[currentNode] = keysArray[currentNode * B];
-		}
-		currentNode += 1;
+		int _nodeIndex = id / minKeysPerNode;
+		const bool addToPrevious = _nodeIndex == bottomPages;
+		_nodeIndex += addToPrevious ? -1 : 0;
+		const int& nodeIndex = _nodeIndex;
+		const int indexInNode = id - nodeIndex * minKeysPerNode;
+		keysArray[nodeIndex * maxKeysPerNode + indexInNode] = hashesArray[id];
+		indexesArray[nodeIndex * maxIndexesPerNode + indexInNode] = valueArray[id];
+		id += threadsNum;
 	}
-	else //Not only root page
+	id = globalId;
+	while (id < bottomPages)
 	{
-		//Creation of leafs
-		int id = globalId;
-		//Copying elements to leaf pages
-		while (id < elementNum)
-		{
-			const int skippedPages = id / (B / 2); //Pages to skipped
-			const int offsetOnPage = id - skippedPages * (B / 2); //Offset on page
-			const int destination = skippedPages * B + offsetOnPage + (skippedPages == bottomPages ? -B : 0); /*Final destination where element must be copied.
-			If a number of skipped pages equals to a number of all leaf pages then destination is corrected by size of pages to insert elements to last page.*/
-			const int valuesDestination = skippedPages * (B + 1) + offsetOnPage + (skippedPages == bottomPages ? -(B + 1) : 0);
-			keysArray[destination] = hashesArray[id];
-			indexesArray[valuesDestination] = valueArray[id];
-			id += threadsNum;
-		}
-		id = globalId;
-		//Filling size of pages and indexes to next leafs
-		while (id < bottomPages)
-		{
-			const int leftElements = elementNum - id * (B / 2);
-			sizeArray[id] = B / 2 + (leftElements < (B / 2) ? leftElements : 0);
-			minArray[id] = keysArray[id * B];
-			indexesArray[id * (B + 1) + B] = id != (bottomPages - 1) ? id + 1 : -1;
-			id += threadsNum;
-		}
+		const int &nodeIndex = id;
+		const bool isLast = nodeIndex == bottomPages - 1;
+		sizeArray[nodeIndex] = isLast ? elementNum - (bottomPages - 1) * minKeysPerNode : minKeysPerNode;
+		minArray[nodeIndex] = hashesArray[nodeIndex * minKeysPerNode];
+		indexesArray[nodeIndex * maxIndexesPerNode + maxIndexesPerNode - 1] = isLast ? -1 : nodeIndex + 1;
+		id += threadsNum;
 	}
 	//Filling output
 	if (globalId == 0)
 	{
 		reinterpret_cast<output_create_leafs*>(output)->rootNodeIndex = 0;
 		reinterpret_cast<output_create_leafs*>(output)->usedNodes = bottomPages;
-		reinterpret_cast<output_create_leafs*>(output)->isOnlyRoot = bottomPages == 0 ? 1 : 0;
+		reinterpret_cast<output_create_leafs*>(output)->isOnlyRoot = bottomPages == 1 ? 1 : 0;
 	}
 }
 
 template<class HASH, int B, class Output>
 __global__ void kernel_get_value(const int threadsNum, const int elementNum, HASH* keysArray, int* sizeArray, int* indexesArray, HASH* toFind, int height, int rootIndex, Output* output)
 {
+	only_gpu_assert();
 	const int globalId = GetGlobalId();
-	const int sizeOfSizeNode = 1;
-	const int sizeOfKeyNode = B;
-	const int sizeOfIndexNode = B + 1;
-	int currentHeight = 0;
-	int currentNode = rootIndex;
-	int i;
+	const int maxIndexesPerNode = B + 1;
+	const int maxKeysPerNode = B;
 	int id = globalId;
 	while (id < elementNum)
 	{
 		const HASH key = toFind[id];
+		int currentHeight = 0;
+		int node = rootIndex;
 		//Inner nodes
 		while (currentHeight < height)
 		{
-			const int size = sizeArray[currentNode * sizeOfSizeNode];
-			i = 0;
-			while (i < size && keysArray[currentNode * sizeOfKeyNode + i] <= key)
-				++i;
-			currentNode = indexesArray[currentNode * sizeOfIndexNode + i];
-			++currentHeight;
+			const int size = sizeArray[node];
+			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
+			const HASH *keys_end = keys_begin + size;
+			const HASH *keys = keys_begin;
+			while (keys < keys_end && *keys <= key)
+			{
+				++keys;
+			}
+			node = indexesArray[node * maxIndexesPerNode + (keys - keys_begin)];
+			currentHeight += 1;
 		}
 		//Leaf level
-		i = 0;
-		const int size = sizeArray[currentNode * sizeOfSizeNode];
-		int found = 0;
-		while (i < size && keysArray[currentNode * sizeOfKeyNode + i] <= key)
 		{
-			if (key == keysArray[currentNode * sizeOfKeyNode + i])
+			const int size = sizeArray[node];
+			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
+			const HASH *keys_end = keys_begin + size;
+			const HASH *keys = keys_begin;
+			while (keys < keys_end && *keys < key)
+			{
+				++keys;
+			}
+			if (keys < keys_end && *keys == key)
 			{
 				if (std::is_same<Output, bool>::value)
-					reinterpret_cast<bool*>(output)[id] = true;
+					output[id] = true;
 				else
-					output[id] = indexesArray[currentNode * sizeOfIndexNode + i];
-				found = 1;
-				break;
+					output[id] = indexesArray[node * maxIndexesPerNode + (keys - keys_begin)];
 			}
-			++i;
-		}
-		if (found == 0)
-		{
-			if (std::is_same<Output, bool>::value)
-				reinterpret_cast<bool*>(output)[id] = false;
 			else
-				output[id] = -1;
+			{
+				if (std::is_same<Output, bool>::value)
+					output[id] = false;
+				else
+					output[id] = -1;
+			}
 		}
 		id += threadsNum;
 	}
@@ -320,6 +297,7 @@ bool bplus_tree_gpu<HASH, B>::exist(HASH key)
 template <class HASH, int B>
 std::vector<bool> bplus_tree_gpu<HASH, B>::exist(HASH* keys, int size)
 {
+	const int elementNum = size;
 	HASH* d_keys;
 	bool *output = new bool[size];
 	bool* d_output;
@@ -327,8 +305,9 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist(HASH* keys, int size)
 	gpuErrchk(cudaMalloc(&d_output, size * sizeof(bool)));
 	gpuErrchk(cudaMemcpy(d_keys, keys, size * sizeof(HASH), cudaMemcpyHostToDevice));
 
-	const int threadsNum = 32;
-	kernel_get_value<HASH, B> kernel_init(threadsNum, 1) (threadsNum, size, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
+	const int threadsNum = elementNum < 1024 ? elementNum : 1024;
+	const int blocksNum = elementNum < 1024 ? 1 : static_cast<int>(std::ceil(elementNum / 1024.f));
+	kernel_get_value<HASH, B> kernel_init(threadsNum, blocksNum) (threadsNum, elementNum, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
 	gpuErrchk(cudaGetLastError());
 
 	gpuErrchk(cudaMemcpy(output, d_output, size * sizeof(bool), cudaMemcpyDeviceToHost));
@@ -346,6 +325,7 @@ int bplus_tree_gpu<HASH, B>::get_value(HASH key)
 template <class HASH, int B>
 std::vector<int> bplus_tree_gpu<HASH, B>::get_value(HASH* keys, int size)
 {
+	const int elementNum = size;
 	HASH* d_keys;
 	std::vector<int> output(size);
 	int* d_output;
@@ -353,8 +333,9 @@ std::vector<int> bplus_tree_gpu<HASH, B>::get_value(HASH* keys, int size)
 	gpuErrchk(cudaMalloc(&d_output, size * sizeof(int)));
 	gpuErrchk(cudaMemcpy(d_keys, keys, size * sizeof(HASH), cudaMemcpyHostToDevice));
 
-	const int threadsNum = 32;
-	kernel_get_value<HASH, B> kernel_init(threadsNum, 1) (threadsNum, size, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
+	const int threadsNum = elementNum < 1024 ? elementNum : 1024;
+	const int blocksNum = elementNum < 1024 ? 1 : static_cast<int>(std::ceil(elementNum / 1024.f));
+	kernel_get_value<HASH, B> kernel_init(threadsNum, blocksNum) (threadsNum, elementNum, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
 	gpuErrchk(cudaGetLastError());
 
 	gpuErrchk(cudaMemcpy(output.data(), d_output, size * sizeof(int), cudaMemcpyDeviceToHost));

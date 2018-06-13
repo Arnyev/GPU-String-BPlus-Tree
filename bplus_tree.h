@@ -32,7 +32,7 @@ int bplus_tree<HASH, B>::needed_nodes(int elemNum)
 		return 1;
 	int pages = elemNum * 2 / B;
 	elemNum = pages;
-	while (elemNum > B)
+	while (elemNum > B + 1)
 	{
 		elemNum = elemNum / (B / 2 + 1);
 		pages += elemNum;
