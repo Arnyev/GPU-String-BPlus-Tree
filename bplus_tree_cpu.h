@@ -174,20 +174,26 @@ void bplus_tree_cpu<HASH, B>::insert_and_split(HASH& key, int& value, int node, 
 	}
 	else
 	{
-		std::copy(indexesArray[node].begin() + B / 2 + newNode_right_offset + 1, indexesArray[node].end(), indexesArray[newNode].begin() + newNode_right_offset + 1);
+		std::copy(indexesArray[node].begin() + B / 2 + newNode_right_offset, indexesArray[node].end(), indexesArray[newNode].begin() + newNode_right_offset);
 	}
-	// Left side of a new node
-	const int newNode_left_offset = (B / 2 - newNode_right_offset) + (destination > B / 2 ? 1 : 0);
-	std::copy(keysArray[node].begin() + B / 2, keysArray[node].end() - newNode_left_offset, keysArray[newNode].begin());
-	if (IsLeafNode)
+	if (destination > B / 2) // Element will be inserted to a new node, more copying is required
 	{
-		std::copy(indexesArray[node].begin() + B / 2, indexesArray[node].end() - newNode_left_offset - 1, indexesArray[newNode].begin());
+		// Left side of a new node
+		const int newNode_left_offset = B - destination;
+		if (newNode_left_offset < B / 2)
+		{
+			std::copy(keysArray[node].begin() + B / 2 + 1, keysArray[node].end() - newNode_left_offset, keysArray[newNode].begin());
+		}
+		if (IsLeafNode)
+		{
+			std::copy(indexesArray[node].begin() + B / 2 + 1, indexesArray[node].end() - newNode_left_offset - 1, indexesArray[newNode].begin());
+		}
+		else
+		{
+			std::copy(indexesArray[node].begin() + B / 2 + 1, indexesArray[node].end() - newNode_left_offset, indexesArray[newNode].begin());
+		}
 	}
-	else
-	{
-		std::copy(indexesArray[node].begin() + B / 2, indexesArray[node].end() - newNode_left_offset, indexesArray[newNode].begin());
-	}
-	if (destination < B / 2) // If element will not be inserted to a new node, shifting is required in an old node
+	else //if (destination <= B / 2) // If element will not be inserted to a new node, shifting is required in an old node
 	{
 		// Right side of an old node
 		std::rotate(keysArray[node].rbegin() + B / 2 - 1, keysArray[node].rbegin() + B / 2, keysArray[node].rend() - destination);
@@ -225,10 +231,14 @@ void bplus_tree_cpu<HASH, B>::insert_and_split(HASH& key, int& value, int node, 
 		}
 		else
 		{
-			indexesArray[node][destination + 1] = value;
 			if (destination != B / 2)
 			{
 				keysArray[node][destination] = key;
+				indexesArray[node][destination + 1] = value;
+			}
+			else
+			{
+				indexesArray[newNode][0] = value;
 			}
 		}
 	}
@@ -247,7 +257,7 @@ void bplus_tree_cpu<HASH, B>::insert_and_split(HASH& key, int& value, int node, 
 		minArray[node] = minArray[indexesArray[node][0]];
 		minArray[newNode] = minArray[indexesArray[newNode][0]];
 	}
-	key = keysArray[newNode][0];
+	key = minArray[newNode];
 	value = newNode;
 }
 
@@ -448,7 +458,7 @@ void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
 			node += 1;
 		}
 	}
-	usedNodes = node - 1;
+	usedNodes = node;
 }
 
 template <class HASH, int B>

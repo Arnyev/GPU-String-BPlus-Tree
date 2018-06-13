@@ -71,7 +71,6 @@ BOOST_AUTO_TEST_CASE(tree_with_1_height)
 	}
 }
 
-
 BOOST_AUTO_TEST_CASE(tree_with_2_height)
 {
 	const int PAGE_SIZE = 16;
@@ -92,8 +91,7 @@ BOOST_AUTO_TEST_CASE(tree_with_height_greater_than_2)
 	int sizes[] = {
 		2'000,
 		5'000,
-		7'777,
-		12'000 };
+		7'777 };
 	for (int size : sizes)
 	{
 		test_tree_creation<PAGE_SIZE>(size, compute_height<PAGE_SIZE>(size));

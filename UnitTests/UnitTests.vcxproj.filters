@@ -5,6 +5,9 @@
     <ClCompile Include="tree_construction.cpp">
       <Filter>bplus_tree_cpu_tests</Filter>
     </ClCompile>
+    <ClCompile Include="insertion.cpp">
+      <Filter>bplus_tree_cpu_tests</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="bplus_tree_cpu_tests">

@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StringBPlusTree", "StringBPlusTree.vcxproj", "{22828AC0-F62B-4F9F-B915-9CD73E209BCE}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnitTests", "UnitTests\UnitTests.vcxproj", "{9C36FAF7-32DE-4FD9-B366-109F4C880113}"
+	ProjectSection(ProjectDependencies) = postProject
+		{22828AC0-F62B-4F9F-B915-9CD73E209BCE} = {22828AC0-F62B-4F9F-B915-9CD73E209BCE}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
