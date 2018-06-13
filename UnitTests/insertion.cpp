@@ -98,7 +98,7 @@ BOOST_AUTO_TEST_CASE(insertion_to_root_with_node_spliting)
 
 BOOST_AUTO_TEST_CASE(insertion_to_leaf)
 {
-	const int PAGE_SIZE = 6;
+	const int PAGE_SIZE = 16;
 	const int INITIAL_SIZE = 250;
 	std::vector<tree_pair> pairs;
 	auto tree = initialize_tree<PAGE_SIZE>(INITIAL_SIZE, pairs);
