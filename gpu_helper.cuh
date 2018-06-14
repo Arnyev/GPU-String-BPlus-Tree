@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <cassert>
 
-#if __CUDACC__
+#if __NVCC__
 #define kernel_init(...) <<<__VA_ARGS__>>>
 #define only_gpu_assert()
 

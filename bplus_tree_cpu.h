@@ -333,12 +333,12 @@ bool bplus_tree_cpu<HASH, B>::inner_insert(HASH& key, int& value, int node, int 
 		success = found == nodeKeys.end() || *found != key;
 		if (!success)
 			return false;
-		return insert_element_at<true>(key, value, node, std::distance(nodeKeys.begin(), found));
+		return insert_element_at<true>(key, value, node, static_cast<int>(std::distance(nodeKeys.begin(), found)));
 	}
 	else
 	{
 		//Inner node level
-		const int target = std::distance(nodeKeys.begin(), found);
+		const int target = static_cast<int>(std::distance(nodeKeys.begin(), found));
 		const int targetNode = nodeIndexes[target];
 		if (!inner_insert(key, value, targetNode, height + 1, success))
 		{
@@ -439,7 +439,6 @@ int bplus_tree_cpu<HASH, B>::get_leaf(HASH key)
 {
 	int currentHeight = 0;
 	int node = rootNodeIndex;
-	int i;
 	//Inner nodes
 	while (currentHeight < height)
 	{
@@ -447,7 +446,7 @@ int bplus_tree_cpu<HASH, B>::get_leaf(HASH key)
 		index_array& nodeIndexes = indexesArray[node];
 		const int size = sizeArray[node];
 		const auto found = std::lower_bound(nodeKeys.begin(), nodeKeys.begin() + size, key);
-		const int index = std::distance(nodeKeys.begin(), found) + (found != nodeKeys.end() && *found == key ? 1 : 0);
+		const int index = static_cast<int>(std::distance(nodeKeys.begin(), found) + (found != nodeKeys.end() && *found == key ? 1 : 0));
 		node = nodeIndexes[index];
 		++currentHeight;
 	}
@@ -524,7 +523,7 @@ int bplus_tree_cpu<HASH, B>::get_value(HASH key)
 	const auto found = std::lower_bound(nodeKeys.begin(), nodeKeys.begin() + size, key);
 	if (found != nodeKeys.end() && *found == key)
 	{
-		const int index = std::distance(nodeKeys.begin(), found);
+		const int index = static_cast<int>(std::distance(nodeKeys.begin(), found));
 		return nodeIndexes[index];
 	}
 	else
