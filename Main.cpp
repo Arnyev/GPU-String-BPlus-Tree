@@ -14,6 +14,8 @@
 using namespace std;
 void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount, size_t wordArraySize);
 
+void ComputeHash(int wordLength, unsigned char * d_wordArray, int myPosition, uint &hash);
+
 bool  ReadFileToBuffer(long &length, unsigned char * &buffer)
 {
 	FILE * f = fopen(FILEPATH, "rb");
