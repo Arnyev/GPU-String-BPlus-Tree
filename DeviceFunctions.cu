@@ -12,6 +12,7 @@ void __syncthreads();
 #include "thrust/device_ptr.h"
 #include "bplus_tree_gpu.cuh"
 #include <thrust/extrema.h>
+#include <vector>
 
 #define CHARSTOHASH 6
 #define ALPHABETSIZE 27
@@ -24,15 +25,18 @@ void __syncthreads();
 typedef unsigned char uchar;
 typedef unsigned long long ullong;
 
-ullong ComputeHash(uchar * d_wordArray, int myPosition, int charsToHash, int offset)
+__device__ __host__ ullong ComputeHash(uchar * d_wordArray, int myPosition, int charsToHash, int offset, bool* wordFinished)
 {
 	int i = 0;
 	ullong hash = 0;
 	for (; i < charsToHash; i++)
 	{
 		unsigned char c = d_wordArray[i + myPosition];
-		if (c == BREAKCHAR)
+		if (c == BREAKCHAR) 
+		{
+			*wordFinished = true;
 			break;
+		}
 		hash *= ALPHABETSIZE;
 		if (c >= ASCIILOWSTART)
 			hash += c - ASCIILOWSTART;
@@ -52,58 +56,77 @@ __global__ void ComputeHashesD(unsigned char* d_wordArray, int* d_wordPositions,
 	if (threadNum >= wordCount)
 		return;
 
-	int wordLength = d_wordLengths[threadNum];
 	int myPosition = d_wordPositions[threadNum];
-	ullong hash = ComputeHash(d_wordArray, myPosition, CHARSTOHASH, 0);
+	bool wordFinished;
+	ullong hash = ComputeHash(d_wordArray, myPosition, CHARSTOHASH, 0, &wordFinished);
 
 	d_hashesOut[threadNum] = hash;
 	indicesOut[threadNum] = threadNum;
 }
 
-__global__ void PackKeysD(uchar* words, int* wordPositions, uint* segments,
+__global__ void PackKeysD(uchar* words, int* wordPositions, uint* segments, bool * wordsFinished,
 	ullong* keys, int offset, int charsToHash, int segShift, int wordCount)
 {
 	int threadNum = threadIdx.x + blockDim.x*blockIdx.x;
 	if (threadNum >= wordCount)
 		return;
 
-	ullong key = segments[threadNum];
-	key = key << segShift;
+	uint segment= segments[threadNum];
+	ullong key = ((ullong)segment) << segShift;
 	int myPosition = wordPositions[threadNum];
-	ullong hash = ComputeHash( words, myPosition, charsToHash, offset);
+	bool wordFinished = false;
+	ullong hash = ComputeHash(words, myPosition, charsToHash, offset, &wordFinished);
+	wordsFinished[threadNum] = wordFinished;
 	key |= hash;
 	keys[threadNum] = key;
 }
 
-__global__ void MarkSingletons(ullong* keys, uchar* flags, int* destinations, 
-	int* output, int* wordStarts, int wordCount)
+__global__ void MarkSingletons(ullong* keys, uchar* flags, int* destinations,
+	int* output, int* wordStarts, int wordCount, bool * wordsFinished)
 {
 	int threadNum = threadIdx.x + blockDim.x*blockIdx.x;
 	if (threadNum >= wordCount)
 		return;
 
 	uchar shouldOutput = 0;
-
+	uchar isDuplicate = 0;
+	ullong keyLast;
+	ullong key;
+	ullong keyNext;
 	if (threadNum == 0)
 	{
 		shouldOutput = keys[threadNum] != keys[threadNum + 1];
 	}
-	else if (threadNum == wordCount - 1)
-	{
-		shouldOutput = keys[threadNum] != keys[threadNum - 1];
-	}
 	else
 	{
-		shouldOutput = keys[threadNum] != keys[threadNum - 1] && keys[threadNum] != keys[threadNum + 1];
+		keyLast = keys[threadNum - 1];
+		key = keys[threadNum];
+		if (threadNum == wordCount - 1)
+			shouldOutput = keyLast != key;
+		else
+		{
+			keyNext = keys[threadNum + 1];;
+			shouldOutput = keyLast != key && key != keyNext;
+		}
+
+		isDuplicate = key == keyLast && wordsFinished[threadNum] && wordsFinished[threadNum - 1];
 	}
 
-	flags[threadNum] = !shouldOutput;
-	if (!shouldOutput)
+	flags[threadNum] = !shouldOutput && !isDuplicate;
+	if (!shouldOutput && !isDuplicate)
 		return;
 
 	int indexOutput = destinations[threadNum];
 	int wordStart = wordStarts[threadNum];
-	output[indexOutput] = wordStart;
+
+	if (isDuplicate)
+	{
+		output[indexOutput] = -1;
+	}
+	else
+	{
+		output[indexOutput] = wordStart;
+	}
 }
 
 
@@ -157,11 +180,12 @@ void SortStrings2(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordL
 	int* d_wordPositionsIn;
 	int* d_wordPositionsOut;
 	int* d_destinationsIn;
+	bool* d_wordsFinished;
 	int* d_destinationsOut;
 	uint* d_segments;
 	uchar* d_flags;
-	int* d_wordPositionsOut;
 	int* d_scatterMap;
+	int* d_output;
 	checkCudaErrors(cudaMalloc((void**)&d_keysIn, sizeof(ullong)*wordCount));
 	checkCudaErrors(cudaMalloc((void**)&d_keysOut, sizeof(ullong)*wordCount));
 	checkCudaErrors(cudaMalloc((void**)&d_wordArray, wordArraySize));
@@ -171,7 +195,9 @@ void SortStrings2(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordL
 	checkCudaErrors(cudaMalloc((void**)&d_destinationsOut, sizeof(int)*wordCount));
 	checkCudaErrors(cudaMalloc((void**)&d_segments, sizeof(uint)*wordCount));
 	checkCudaErrors(cudaMalloc((void**)&d_flags, sizeof(uchar)*wordCount));
-	checkCudaErrors(cudaMalloc((void**)&d_wordPositionsOut, sizeof(int)*wordCount));
+	checkCudaErrors(cudaMalloc((void**)&d_wordsFinished, sizeof(bool)*wordCount));
+	checkCudaErrors(cudaMalloc((void**)&d_scatterMap, sizeof(int)*wordCount));
+	checkCudaErrors(cudaMalloc((void**)&d_output, sizeof(int)*wordCount));
 
 	checkCudaErrors(cudaMemcpy(d_wordArray, h_wordArray, wordArraySize, cudaMemcpyHostToDevice));
 	checkCudaErrors(cudaMemcpy(d_wordPositionsIn, h_wordPositions, wordCount * sizeof(int), cudaMemcpyHostToDevice));
@@ -182,35 +208,95 @@ void SortStrings2(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordL
 	uint numThreads, numBlocks;
 	computeGridSize(wordCount, BLOCKSIZE, numBlocks, numThreads);
 
-	CreateConsecutiveNumbers(d_destinationsIn, wordCount);
-	int offset = 13;
+	CreateConsecutiveNumbers << <numBlocks, numThreads >> >(d_destinationsIn, wordCount);
+	int offset = 0;
 	int segmentSize = 0;
 
-	PackKeysD << <numBlocks, numThreads >> > (d_wordArray, d_wordPositions, d_segments, d_keys, 0, offset, 0, wordCount);
+	PackKeysD << <numBlocks, numThreads >> > (d_wordArray, d_wordPositionsIn, d_segments, d_wordsFinished, d_keysIn, 0, offset, 0, wordCount);
+
+	ullong* keys = (ullong*)malloc(wordCount * sizeof(ullong));
+	checkCudaErrors(cudaMemcpy(keys, d_keysIn, wordCount * sizeof(ullong), cudaMemcpyDeviceToHost));
+	std::vector<ullong> v2(keys, keys + wordCount);
+
 	int currentCount = wordCount;
 	int maxLen = *(thrust::max_element(thrust::host, h_wordLengths, h_wordLengths + wordCount));
 	while (offset < maxLen)
 	{
-		thrust::sort_by_key(thrust::device_ptr<uint>(d_keysIn), thrust::device_ptr<uint>(d_keysIn + currentCount),
+		if (offset == 0)
+			offset = 13;
+
+		thrust::sort_by_key(thrust::device_ptr<ullong>(d_keysIn), thrust::device_ptr<ullong>(d_keysIn + currentCount),
 			thrust::device_ptr<int>(d_wordPositionsIn));
 
 		MarkSingletons << <numBlocks, numThreads >> > (d_keysIn, d_flags, d_destinationsIn,
-			d_wordPositionsOut, d_wordPositionsIn, currentCount);
+			d_output, d_wordPositionsIn, (int)currentCount, d_wordsFinished);
+
 		thrust::exclusive_scan(thrust::device_ptr<uchar>(d_flags),
 			thrust::device_ptr<uchar>(d_flags + currentCount), thrust::device_ptr<int>(d_scatterMap));
+
 		ScatterValues << <numBlocks, numThreads >> > (d_keysIn, d_keysOut, d_wordPositionsIn, d_destinationsOut,
 			d_destinationsIn, d_destinationsOut, d_flags, d_scatterMap, currentCount);
-		checkCudaErrors(cudaMemcpy(&currentCount, d_scatterMap + sizeof(int)*(currentCount - 1), sizeof(int),
-			cudaMemcpyDeviceToHost));
+
+		checkCudaErrors(cudaMemcpy(h_wordPositions, d_scatterMap, currentCount * sizeof(int), cudaMemcpyDeviceToHost));
+		std::vector<int> v(h_wordPositions, h_wordPositions + wordCount);
+
+		checkCudaErrors(cudaMemcpy(&currentCount, d_scatterMap + currentCount - 1, 4, cudaMemcpyDeviceToHost));
 		currentCount += 1;
-		ComputeSegments(d_keysOut, d_segments, currentCount);
+		computeGridSize((int)currentCount, BLOCKSIZE, numBlocks, numThreads);
+
+		ComputeSegments << <numBlocks, numThreads >> > (d_keysOut, d_segments,(int) currentCount);
+
 		thrust::exclusive_scan(thrust::device_ptr<uint>(d_segments),
 			thrust::device_ptr<uint>(d_segments + currentCount), thrust::device_ptr<uint>(d_segments));
-		checkCudaErrors(cudaMemcpy(&segmentSize, d_segments + sizeof(int)*(currentCount - 1), sizeof(int),
-			cudaMemcpyDeviceToHost));
-		PackKeysD << <numBlocks, numThreads >> > (d_wordArray, d_wordPositions, d_segments, d_keys, offset, 13 - segmentSize, 64 - segmentSize, wordCount);
+
+		checkCudaErrors(cudaMemcpy(&segmentSize, d_segments + currentCount - 1, sizeof(int), cudaMemcpyDeviceToHost));
+
+		PackKeysD << <numBlocks, numThreads >> > (d_wordArray, d_wordPositionsOut, d_segments,
+			d_wordsFinished, d_keysOut, offset, 13 - segmentSize, 64 - segmentSize, wordCount);
+
 		offset += 13 - segmentSize;
+		void* tmp = d_keysOut;
+		d_keysOut = d_keysIn;
+		d_keysIn = (ullong*)tmp;
+		tmp = d_wordPositionsOut;
+		d_wordPositionsOut = d_wordPositionsIn;
+		d_wordPositionsIn = (int*)tmp;
+		tmp = d_destinationsOut;
+		d_destinationsOut = d_destinationsIn;
+		d_destinationsIn = (int*)tmp;
 	}
+
+	uchar* wordArrayOut = (uchar*)malloc(wordArraySize);
+
+	checkCudaErrors(cudaMemcpy(h_wordPositions, d_output, wordCount * sizeof(int), cudaMemcpyDeviceToHost));
+	int wordArrayIndex = 0;
+	int indexInWord = 0;
+
+	for (int i = 0; i < wordCount; i++)
+	{
+		int position = h_wordPositions[i];
+		if (position == -1)
+			continue;
+		indexInWord = 0;
+		while (true)
+		{
+			uchar c = h_wordArray[position + indexInWord];
+			if (c != BREAKCHAR)
+			{
+				wordArrayOut[wordArrayIndex++] = c;
+				indexInWord++;
+			}
+			else
+				break;
+		}
+		wordArrayOut[wordArrayIndex++] = BREAKCHAR;
+	}
+	std::vector<int> pos(h_wordPositions, h_wordPositions + wordCount);
+	std::vector<char> pos2(wordArrayOut, wordArrayOut + wordArraySize);
+	std::vector<int>::iterator it;
+	it = std::unique(pos.begin(), pos.end());   // 10 20 30 20 10 ?  ?  ?  ?//                
+	pos.resize(std::distance(pos.begin(), it)); // 10 20 30 20 10
+	std::string s(wordArrayOut, wordArrayOut + wordArraySize);
 }
 
 __global__ void RepositionStringsD(unsigned char* d_wordArrayIn, unsigned char* d_wordArrayOut, int* d_positionIn, int* d_positionOut, int* d_wordLenghts, int wordCount)
@@ -236,46 +322,4 @@ __global__ void RepositionDataD(int* d_indices, int* d_positionOut, int* d_posit
 	int oldIndex = d_indices[threadNum];
 	d_wordLenghtsOut[threadNum] = d_wordLenghtsIn[oldIndex];
 	d_positionOut[threadNum] = d_positionIn[oldIndex];
-}
-
-void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount, size_t wordArraySize)
-{
-	unsigned char* d_wordArrayIn;
-	unsigned char* d_wordArrayOut;
-	int* d_wordPositions;
-	uint* d_hashes;
-	int* d_wordLengths;
-	int* d_wordPositionsResult;
-	int* d_wordLengthsResult;
-	int* d_indices;
-	checkCudaErrors(cudaMalloc((void**)&d_wordArrayIn, wordArraySize));
-	checkCudaErrors(cudaMalloc((void**)&d_wordArrayOut, wordArraySize));
-	checkCudaErrors(cudaMalloc((void**)&d_wordPositions, sizeof(int)*wordCount));
-	checkCudaErrors(cudaMalloc((void**)&d_hashes, wordCount * sizeof(uint)));
-	checkCudaErrors(cudaMalloc((void**)&d_wordLengths, wordCount * sizeof(int)));
-	checkCudaErrors(cudaMalloc((void**)&d_wordPositionsResult, wordCount * sizeof(int)));
-	checkCudaErrors(cudaMalloc((void**)&d_wordLengthsResult, wordCount * sizeof(int)));
-	checkCudaErrors(cudaMalloc((void**)&d_indices, wordCount * sizeof(int)));
-
-	checkCudaErrors(cudaMemcpy(d_wordLengths, h_wordLengths, wordCount * sizeof(int), cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(d_wordPositions, h_wordPositions, wordCount * sizeof(int), cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(d_wordArrayIn, h_wordArray, wordArraySize, cudaMemcpyHostToDevice));
-
-	uint numThreads, numBlocks;
-	computeGridSize(wordCount, BLOCKSIZE, numBlocks, numThreads);
-
-	ComputeHashesD << <numBlocks, numThreads >> > (d_wordArrayIn, d_wordPositions, d_wordLengths, d_hashes, d_indices, wordCount);
-	getLastCudaError("ComputeHashesD kernel execution failed.\n");
-
-	thrust::sort_by_key(thrust::device_ptr<uint>(d_hashes), thrust::device_ptr<uint>(d_hashes + wordCount), thrust::device_ptr<int>(d_indices));
-
-	RepositionDataD << <numBlocks, numThreads >> > (d_indices, d_wordPositionsResult, d_wordPositions, d_wordLengths, d_wordLengthsResult, wordCount);
-	getLastCudaError("RepositionPositionsAndLengthsD kernel execution failed.\n");
-
-	thrust::exclusive_scan(thrust::device_ptr<int>(d_wordLengthsResult), thrust::device_ptr<int>(d_wordLengthsResult + wordCount), thrust::device_ptr<int>(d_wordPositions));
-
-	RepositionStringsD << <numBlocks, numThreads >> > (d_wordArrayIn, d_wordArrayOut, d_wordPositionsResult, d_wordPositions, d_wordLengthsResult, wordCount);
-	getLastCudaError("RepositionDataD kernel execution failed.\n");
-
-	checkCudaErrors(cudaMemcpy(h_wordArray, d_wordArrayOut, wordArraySize, cudaMemcpyDeviceToHost));
 }

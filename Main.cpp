@@ -12,9 +12,8 @@
 #define FILEPATH "book.txt"
 
 using namespace std;
-void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount, size_t wordArraySize);
-
-void ComputeHash(int wordLength, unsigned char * d_wordArray, int myPosition, uint &hash);
+void SortStrings2(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount,
+	size_t wordArraySize);
 
 bool  ReadFileToBuffer(long &length, unsigned char * &buffer)
 {
@@ -127,6 +126,6 @@ int main(int argc, char **argv)
 	int charCount;
 	ReadFile(h_wordPositions, h_wordLengths, wordPositions, wordLengths, h_wordArray, wordCount, charCount);
 
-	SortStrings(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
+	SortStrings2(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
 }
 
