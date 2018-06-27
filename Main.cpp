@@ -10,9 +10,10 @@
 #include "bplus_tree_cpu.h"
 
 #define FILEPATH "book.txt"
+#define STRMAXLEN 128
 
 using namespace std;
-void SortStrings2(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount,
+void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount,
 	size_t wordArraySize);
 
 bool  ReadFileToBuffer(long &length, unsigned char * &buffer)
@@ -71,7 +72,7 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 		{
 			if (currentlyOnNotAlphaSeq)
 			{
-				wordLengths.push_back(writeIndex - wordStart);
+				wordLengths.push_back(writeIndex - wordStart - 1);
 				wordStart = writeIndex;
 				wordPositions.push_back(writeIndex);
 				currentlyOnNotAlphaSeq = false;
@@ -86,7 +87,7 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 			currentlyOnNotAlphaSeq = true;
 		}
 	}
-	wordLengths.push_back(writeIndex + 1 - wordStart);
+	wordLengths.push_back(writeIndex - wordStart);
 	buffer[writeIndex] = ' ';
 	h_wordPositions = wordPositions.data();
 	h_wordArray = buffer;
@@ -96,24 +97,26 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 	return true;
 }
 
+
+
 int main(int argc, char **argv)
 {
 	//Sample creation of B+ tree
-	int i = 0;
-	int size = 64;
-	vector<int> keys(size);
-	vector<int> values(size);
-	generate(keys.begin(), keys.end(), [&i]() -> int { return ++i; });
-	i = 1;
-	generate(values.begin(), values.end(), [&i]() -> int { return ++i; });
-	bplus_tree_gpu<int, 4> gt(keys.data(), values.data(), size);
-	bplus_tree_cpu<int, 4> ct(gt);
-	bplus_tree_cpu<int, 4> cte(keys.data(), values.data(), size);
-	int toFind[] = { 1, 2, 0, -1, 64, 65, 3 };
-	auto z1 = ct.get_value(toFind, sizeof(toFind) / sizeof(int));
-	auto z2 = cte.get_value(toFind, sizeof(toFind) / sizeof(int));
-	auto z3 = gt.get_value(toFind, sizeof(toFind) / sizeof(int));
-	//ct and cte should be equal
+	//int i = 0;
+	//int size = 64;
+	//vector<int> keys(size);
+	//vector<int> values(size);
+	//generate(keys.begin(), keys.end(), [&i]() -> int { return ++i; });
+	//i = 1;
+	//generate(values.begin(), values.end(), [&i]() -> int { return ++i; });
+	//bplus_tree_gpu<int, 4> gt(keys.data(), values.data(), size);
+	//bplus_tree_cpu<int, 4> ct(gt);
+	//bplus_tree_cpu<int, 4> cte(keys.data(), values.data(), size);
+	//int toFind[] = { 1, 2, 0, -1, 64, 65, 3 };
+	//auto z1 = ct.get_value(toFind, sizeof(toFind) / sizeof(int));
+	//auto z2 = cte.get_value(toFind, sizeof(toFind) / sizeof(int));
+	//auto z3 = gt.get_value(toFind, sizeof(toFind) / sizeof(int));
+	////ct and cte should be equal
 
 	vector<int> wordPositions;
 	vector<int> wordLengths;
@@ -126,6 +129,33 @@ int main(int argc, char **argv)
 	int charCount;
 	ReadFile(h_wordPositions, h_wordLengths, wordPositions, wordLengths, h_wordArray, wordCount, charCount);
 
-	SortStrings2(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
-}
+	vector<vector<char>> strings(1000000);
+	int len = 0;
+	const char charset[] = "abc";
+	const int sizer = sizeof charset - 1;
+	for (int j = 0; j < 1000000; j++)
+	{
+		const int lena = rand() % STRMAXLEN + 1;
+		strings[j].reserve(lena);
+		for (int i = 0; i < lena; i++)
+			strings[j].push_back(charset[rand() % sizer]);
 
+		len += strings[j].size() + 1;
+	}
+	vector<char> vecc{};
+	vecc.reserve(len);
+	vector<int> positions(strings.size());
+	vector<int> lengths(strings.size());
+	vector<char> chars(len);
+	int currentPosition = 0;
+	for(int k=0;k<strings.size();k++)
+	{
+		positions[k] = currentPosition;
+		lengths[k] = strings[k].size();
+		for (int l = 0; l < lengths[k]; l++)
+			chars[currentPosition++] = strings[k][l];
+		chars[currentPosition++] = ' ';
+	}
+	SortStrings(reinterpret_cast<unsigned char*>(chars.data()), positions.data(), lengths.data(), lengths.size(), chars.size());
+	SortStrings(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
+}

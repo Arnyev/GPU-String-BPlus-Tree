@@ -102,6 +102,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <ClInclude Include="bplus_tree_gpu.cuh" />
     <ClInclude Include="gpu_helper.cuh" />
     <ClInclude Include="not_implemented.h" />
+    <ClInclude Include="SortingsTests.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

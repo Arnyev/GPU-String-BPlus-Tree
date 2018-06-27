@@ -14,5 +14,6 @@
     <ClInclude Include="bplus_tree_gpu.cuh" />
     <ClInclude Include="gpu_helper.cuh" />
     <ClInclude Include="not_implemented.h" />
+    <ClInclude Include="SortingsTests.h" />
   </ItemGroup>
 </Project>
