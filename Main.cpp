@@ -98,6 +98,37 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 }
 
 
+void test_random_strings()
+{
+	vector<vector<char>> strings(1000000);
+	int len = 0;
+	const char charset[] = "abc";
+	const int sizer = sizeof charset - 1;
+	for (int j = 0; j < 1000000; j++)
+	{
+		const int lena = rand() % STRMAXLEN + 1;
+		strings[j].reserve(lena);
+		for (int i = 0; i < lena; i++)
+			strings[j].push_back(charset[rand() % sizer]);
+
+		len += strings[j].size() + 1;
+	}
+	vector<char> vecc{};
+	vecc.reserve(len);
+	vector<int> positions(strings.size());
+	vector<int> lengths(strings.size());
+	vector<char> chars(len);
+	int currentPosition = 0;
+	for(int k=0;k<strings.size();k++)
+	{
+		positions[k] = currentPosition;
+		lengths[k] = strings[k].size();
+		for (int l = 0; l < lengths[k]; l++)
+			chars[currentPosition++] = strings[k][l];
+		chars[currentPosition++] = ' ';
+	}
+	SortStrings(reinterpret_cast<unsigned char*>(chars.data()), positions.data(), lengths.data(), lengths.size(), chars.size());
+}
 
 int main(int argc, char **argv)
 {
@@ -129,33 +160,6 @@ int main(int argc, char **argv)
 	int charCount;
 	ReadFile(h_wordPositions, h_wordLengths, wordPositions, wordLengths, h_wordArray, wordCount, charCount);
 
-	vector<vector<char>> strings(1000000);
-	int len = 0;
-	const char charset[] = "abc";
-	const int sizer = sizeof charset - 1;
-	for (int j = 0; j < 1000000; j++)
-	{
-		const int lena = rand() % STRMAXLEN + 1;
-		strings[j].reserve(lena);
-		for (int i = 0; i < lena; i++)
-			strings[j].push_back(charset[rand() % sizer]);
-
-		len += strings[j].size() + 1;
-	}
-	vector<char> vecc{};
-	vecc.reserve(len);
-	vector<int> positions(strings.size());
-	vector<int> lengths(strings.size());
-	vector<char> chars(len);
-	int currentPosition = 0;
-	for(int k=0;k<strings.size();k++)
-	{
-		positions[k] = currentPosition;
-		lengths[k] = strings[k].size();
-		for (int l = 0; l < lengths[k]; l++)
-			chars[currentPosition++] = strings[k][l];
-		chars[currentPosition++] = ' ';
-	}
-	SortStrings(reinterpret_cast<unsigned char*>(chars.data()), positions.data(), lengths.data(), lengths.size(), chars.size());
+	//test_random_strings();
 	SortStrings(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
 }

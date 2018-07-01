@@ -13,6 +13,7 @@ void __syncthreads();
 #include "bplus_tree_gpu.cuh"
 #include <thrust/extrema.h>
 #include "SortingsTests.h"
+#include <numeric>
 
 #define CHARSTOHASH 12
 #define ALPHABETSIZE 27
@@ -31,9 +32,13 @@ __global__ void PackKeysD(uchar* words, int* wordPositions, uint* segments,
 	if (threadNum >= wordCount)
 		return;
 
+	//todo zepsute segmenty
 	uint segment= segments[threadNum];
 	ullong key = ((ullong)segment) << segShift;
 	int myPosition = wordPositions[threadNum] + offset;
+
+	if (myPosition == -1)
+		return;
 
 	ullong mask = 0;
 	int i = 0;
@@ -51,7 +56,16 @@ __global__ void PackKeysD(uchar* words, int* wordPositions, uint* segments,
 		else
 			hash += c - ASCIIUPSTART;
 	}
-	mask = words[i + myPosition] == BREAKCHAR ? 0 : 1;
+	auto d = words[i + myPosition];
+	if(d==BREAKCHAR)
+	{
+		mask = 0;
+	}
+	else
+	{
+		mask = 1;
+	}
+	//mask = words[i + myPosition] == BREAKCHAR ? 0 : 1;
 
 	for (; i < charsToHash; i++)
 		hash *= ALPHABETSIZE;
@@ -161,7 +175,21 @@ __global__ void ComputeSegments(ullong* keys, uint* segments, int wordCount)
 	if (threadNum >= wordCount)
 		return;
 
-	if (threadNum == 0 || keys[threadNum] != keys[threadNum - 1])
+	segments[threadNum] = 0;
+
+	if (keys[threadNum] == 0)
+	{
+		return;
+	}
+
+
+	if (threadNum == 0)
+	{
+		segments[threadNum] = 1;
+		return;
+	}
+
+	if (keys[threadNum] != keys[threadNum - 1])
 		segments[threadNum] = 1;
 }
 
@@ -198,9 +226,12 @@ __global__ void compute_lengths(uchar* words, int* positions, const int word_cou
 	if (thread_num >= word_count)
 		return;
 
+	int my_position = positions[thread_num];
+	if (my_position == -1)
+		return;
+
 	int length = 0;
 	uchar c;
-	int my_position = positions[thread_num];
 	for (int i = 1; i < CHARSTOHASH; i++)
 	{
 		c = words[my_position + i];
@@ -233,24 +264,186 @@ __global__ void copy_suffixes(uchar* words, int* positions, const int word_count
 		return;
 
 	const int suffix_pos = suffix_positions[thread_num];
-	const int position = positions[thread_num];
+	const int position = positions[thread_num] + CHARSTOHASH;
 
 	for (int i = 0; i < len; i++)
 		suffixes[suffix_pos + i] = words[position + i];
 }
 
+__global__ void copy_values(int* input_suffix_positions, int* destinations, int* output_suffix_positions, int* flags, ullong* input_hashes, ullong* output_hashes, const int word_count)
+{
+	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
+	if (thread_num >= word_count)
+		return;
 
-void CreateOutputArrays(unsigned char* d_wordArray, int* d_sortedPositions, const int word_count, ullong*& d_hash_array, uchar* & d_suffixes, int*&d_output_positions)
+	if (!flags[thread_num])
+		return;
+
+	const int output_position = destinations[thread_num];
+	output_suffix_positions[output_position] = input_suffix_positions[thread_num];
+	output_hashes[output_position] = input_hashes[thread_num];
+}
+ullong chash(string s)
+{
+	ullong mask = 0;
+	int i = 0;
+	ullong hash = 0;
+	for (; i < CHARSTOHASH; i++)
+	{
+		const unsigned char c = s[i];
+		if (c == '\0')
+		{
+			break;
+		}
+		hash *= ALPHABETSIZE;
+		if (c >= ASCIILOWSTART)
+			hash += c - ASCIILOWSTART;
+		else
+			hash += c - ASCIIUPSTART;
+	}
+	mask = s[i] == '\0' ? 0 : 1;
+
+	for (; i < CHARSTOHASH; i++)
+		hash *= ALPHABETSIZE;
+
+	hash <<= 1;
+	hash |= mask;
+	return hash;
+}
+
+int postfix_len_from_str(string str)
+{
+	auto c = str.size();
+	if (c < CHARSTOHASH)
+		return 0;
+	
+	return c - CHARSTOHASH + 1;
+}
+
+void test_output(unsigned char* d_word_array, const int chars_input_count, ullong* d_hash_array, uchar* d_suffixes, int*d_output_positions, const int hash_count, const int char_count)
+{
+	auto z = create_vector(d_word_array, chars_input_count);
+	const string words(z.begin(), z.end());
+	istringstream iss_words(words);
+	vector<string> words_split(istream_iterator<string>{iss_words}, istream_iterator<string>());
+
+	for (auto& i : words_split)
+		std::transform(i.begin(), i.end(), i.begin(), ::tolower);
+
+	std::sort(words_split.begin(), words_split.end());
+
+	const auto it = std::unique(words_split.begin(), words_split.end());
+	words_split.resize(std::distance(words_split.begin(), it));
+
+	std::sort(words_split.begin(), words_split.end());
+
+	vector<ullong> hashes(words_split.size());
+	std::transform(words_split.begin(), words_split.end(), hashes.begin(), chash);
+
+	vector<char> chars(char_count);
+	int curCharPosition = 0;
+	vector<int> positions{};
+	for (int i = 0; i < words_split.size(); i++)
+	{
+		string sts = words_split[i];
+		if (i == 0 || hashes[i] != hashes[i - 1])
+			positions.push_back(curCharPosition);
+
+		if (sts.size() >= CHARSTOHASH)
+		{
+			for (int j = CHARSTOHASH; j < sts.size(); j++)
+				chars[curCharPosition++] = sts[j];
+			chars[curCharPosition++] = 0;
+		}
+	}
+
+	bool fail = false;
+	auto d_hash = create_vector(d_hash_array, hash_count);
+	const auto ita = std::unique(hashes.begin(), hashes.end());
+	hashes.resize(std::distance(hashes.begin(), ita));
+
+	for (int i = 0; i < d_hash.size(); i++)
+		if (d_hash[i] != hashes[i])
+			fail = true;
+
+	vector<int> lens(words_split.size());
+	std::transform(words_split.begin(), words_split.end(), lens.begin(), postfix_len_from_str);
+
+	const auto lenchars = std::accumulate(lens.begin(), lens.end(), 0);
+	if (char_count != lenchars)
+		fail = true;
+
+	auto za = create_vector(d_suffixes, char_count);
+	for (int i = 0; i < chars.size(); i++)
+		if (chars[i] == 0)
+			chars[i] = BREAKCHAR;
+	std::transform(za.begin(), za.end(), za.begin(), ::tolower);
+
+	for (int i = 0; i < char_count; i++)
+		if (chars[i] != za[i])
+			fail = true;
+
+	auto vaa = create_vector(d_output_positions, hash_count);
+	for (int i = 0; i < hash_count; i++)
+		if (vaa[i] != positions[i])
+			fail = true;
+}
+
+__global__ void check_value(int* positions, uchar* flags, const int word_count)
+{
+	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
+	if (thread_num >= word_count)
+		return;
+
+	if (positions[thread_num] == -1)
+		flags[thread_num] = 0;
+	else
+		flags[thread_num] = 1;
+}
+
+__global__ void move_positions(int* input, int* output_positions, int* output, uchar* flags, const int word_count)
+{
+	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
+	if (thread_num >= word_count)
+		return;
+
+	if (!flags[thread_num])
+		return;
+
+	output[output_positions[thread_num]] = input[thread_num];
+}
+
+void create_output_arrays(unsigned char* d_wordArray,int char_count, int* d_sortedPositions, int word_count, ullong*& d_hash_array, uchar* & d_suffixes, int*&d_output_positions)
 {
 	int* d_lengths;
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_hash_array), sizeof(ullong)*word_count));
+	ullong* d_hash_array_all;
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_hash_array_all), sizeof(ullong)*word_count));
 	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_lengths), sizeof(int)*word_count));
-	checkCudaErrors(cudaMemset(d_lengths, 0, sizeof(int)*word_count));
 
 	int* d_suffix_positions;
+	int* d_new_positions;
+	uchar* d_flags;
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_new_positions), sizeof(int)*word_count));
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_flags), sizeof(uchar)*word_count));
 	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_suffix_positions), sizeof(int)*word_count));
 
 	uint num_threads, num_blocks;
+	computeGridSize(word_count, BLOCKSIZE, num_blocks, num_threads);
+
+	check_value << <num_blocks, num_threads >> > (d_sortedPositions,d_flags, word_count);
+	uchar lastflag;
+	checkCudaErrors(cudaMemcpy(&lastflag, d_flags + word_count - 1, sizeof(uchar), cudaMemcpyDeviceToHost));
+
+	exclusive_scan(device_ptr<uchar>(d_flags), device_ptr<uchar>(d_flags + word_count), device_ptr<int>(d_lengths));
+
+	int new_word_count;
+	checkCudaErrors(cudaMemcpy(&new_word_count, d_lengths + word_count - 1, sizeof(int), cudaMemcpyDeviceToHost));
+	new_word_count += lastflag;
+	move_positions << <num_blocks, num_threads >> > (d_sortedPositions, d_lengths, d_new_positions, d_flags, word_count);
+
+	checkCudaErrors(cudaMemset(d_lengths, 0, sizeof(int)*word_count));
+	d_sortedPositions = d_new_positions;
+	word_count = new_word_count;
 	computeGridSize(word_count, BLOCKSIZE, num_blocks, num_threads);
 
 	compute_lengths << <num_blocks, num_threads >> > (d_wordArray, d_sortedPositions, word_count, d_lengths);
@@ -258,9 +451,10 @@ void CreateOutputArrays(unsigned char* d_wordArray, int* d_sortedPositions, cons
 	int last_len;
 	checkCudaErrors(cudaMemcpy(&last_len, d_lengths + word_count - 1, sizeof(int), cudaMemcpyDeviceToHost));
 
-	inclusive_scan(device_ptr<uint>(d_lengths),
-		device_ptr<uint>(d_lengths + word_count), device_ptr<uint>(d_suffix_positions));
-
+	exclusive_scan(device_ptr<int>(d_lengths),
+		device_ptr<int>(d_lengths + word_count), device_ptr<int>(d_suffix_positions));
+	auto vaf=create_vector(d_lengths, word_count);
+	auto kaf = create_vector(d_suffix_positions, word_count);
 	int len_sum;
 
 	checkCudaErrors(cudaMemcpy(&len_sum, d_suffix_positions + word_count - 1, sizeof(int), cudaMemcpyDeviceToHost));
@@ -269,8 +463,47 @@ void CreateOutputArrays(unsigned char* d_wordArray, int* d_sortedPositions, cons
 	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_suffixes), sizeof(uchar)*output_size));
 	copy_suffixes << <num_blocks, num_threads >> > (d_wordArray, d_sortedPositions, word_count, d_lengths, d_suffixes, d_suffix_positions);
 
-	PackKeysD << <num_blocks, num_threads >> > (d_wordArray, d_sortedPositions, reinterpret_cast<uint*>(d_sortedPositions), d_hash_array, 0, CHARSTOHASH, KEYBITS, word_count);
+	uint* d_segments;
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_segments), sizeof(uint)*word_count));
+	checkCudaErrors(cudaMemset(d_segments, 0, sizeof(int)*word_count));
 
+	PackKeysD << <num_blocks, num_threads >> > (d_wordArray, d_sortedPositions, d_segments, d_hash_array_all, 0, CHARSTOHASH, KEYBITS, word_count);
+
+	cudaDeviceSynchronize();
+	ComputeSegments << <num_blocks, num_threads >> >(d_hash_array_all, reinterpret_cast<uint*>(d_lengths), word_count);
+	cudaDeviceSynchronize();
+
+	exclusive_scan(device_ptr<int>(d_lengths), device_ptr<int>(d_lengths + word_count), device_ptr<int>(d_sortedPositions));
+
+	int output_hashes_count;
+	checkCudaErrors(cudaMemcpy(&output_hashes_count, d_sortedPositions + word_count - 1, 4, cudaMemcpyDeviceToHost));
+	output_hashes_count += 1;
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_output_positions), sizeof(int)*output_hashes_count));
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_hash_array), sizeof(ullong)*output_hashes_count));
+
+
+	copy_values << <num_blocks, num_threads >> > (d_suffix_positions, d_sortedPositions, d_output_positions, d_lengths, d_hash_array_all, d_hash_array, word_count);
+
+	test_output(d_wordArray, char_count, d_hash_array, d_suffixes, d_output_positions, output_hashes_count, output_size);
+}
+
+__global__ void RepositionStringsD(unsigned char* d_wordArrayIn, unsigned char* d_wordArrayOut, int* d_positionIn, int* d_positionOut, int wordCount)
+{
+	const int threadNum = threadIdx.x + blockDim.x*blockIdx.x;
+	if (threadNum >= wordCount)
+		return;
+
+	const int positionIn = d_positionIn[threadNum];
+	const int positionOut = d_positionOut[threadNum];
+
+	int i = 0;
+	char c = BREAKCHAR;
+	do
+	{
+		c = d_wordArrayIn[positionIn + i];
+		d_wordArrayOut[positionOut + i] = c;
+		i++;
+	} while (c != BREAKCHAR);
 }
 
 void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount,
@@ -378,19 +611,17 @@ void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLe
 		d_destinationsIn = (int*)tmp;
 	}
 
+	checkCudaErrors(cudaMemcpy(d_wordPositionsIn, h_wordPositions, wordCount * sizeof(int), cudaMemcpyHostToDevice));
 	test_string_sorting(h_wordPositions, d_output, wordCount, h_wordArray, wordArrayOut, wordArraySize);
+
+	checkCudaErrors(cudaMemset(d_segments, 0, sizeof(int)*wordCount));
+	int* d_lenghts = reinterpret_cast<int*>(d_segments);
+	computeGridSize(wordCount, BLOCKSIZE, numBlocks, numThreads);
+
+	//compute_lengths(d_wordArray, d_output, wordCount, d_lenghts);
+	ullong * d_hash_array;
+	uchar* d_suffixes;
+	int* d_output_positions;
+	create_output_arrays(d_wordArray, wordArraySize, d_output, wordCount, d_hash_array, d_suffixes, d_output_positions);
 }
 
-__global__ void RepositionStringsD(unsigned char* d_wordArrayIn, unsigned char* d_wordArrayOut, int* d_positionIn, int* d_positionOut, int* d_wordLenghts, int wordCount)
-{
-	int threadNum = threadIdx.x + blockDim.x*blockIdx.x;
-	if (threadNum >= wordCount)
-		return;
-
-	int positionIn = d_positionIn[threadNum];
-	int positionOut = d_positionOut[threadNum];
-	int wordLength = d_wordLenghts[threadNum];
-
-	for (int i = 0; i < wordLength; i++)
-		d_wordArrayOut[positionOut + i] = d_wordArrayIn[positionIn + i];
-}
