@@ -1,20 +1,15 @@
 #include <cuda_runtime.h>
 #include <helper_cuda.h>
-#include <iterator>
 #include <vector>
-#include <ctype.h>
+#include <cctype>
 #include <regex>
-#include <string>
 #include "Main.h"
 #include "bplus_tree_gpu.cuh"
 #include "bplus_tree_cpu.h"
-
-#define FILEPATH "book.txt"
-#define STRMAXLEN 128
+#include "parameters.h"
+#include "functions.h"
 
 using namespace std;
-void SortStrings(unsigned char* h_wordArray, int* h_wordPositions, int* h_wordLengths, int wordCount,
-	size_t wordArraySize);
 
 bool  ReadFileToBuffer(long &length, unsigned char * &buffer)
 {
@@ -97,7 +92,6 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 	return true;
 }
 
-
 void test_random_strings()
 {
 	vector<vector<char>> strings(1000000);
@@ -106,7 +100,7 @@ void test_random_strings()
 	const int sizer = sizeof charset - 1;
 	for (int j = 0; j < 1000000; j++)
 	{
-		const int lena = rand() % STRMAXLEN + 1;
+		const int lena = rand() % RANDSTRMAXLEN + 1;
 		strings[j].reserve(lena);
 		for (int i = 0; i < lena; i++)
 			strings[j].push_back(charset[rand() % sizer]);
@@ -127,7 +121,20 @@ void test_random_strings()
 			chars[currentPosition++] = strings[k][l];
 		chars[currentPosition++] = ' ';
 	}
-	SortStrings(reinterpret_cast<unsigned char*>(chars.data()), positions.data(), lengths.data(), lengths.size(), chars.size());
+	int* d_positions = get_sorted_positions(reinterpret_cast<unsigned char*>(chars.data()), positions.data(), lengths.data(), lengths.size(), chars.size());
+
+	bool sorting_result = test_string_sorting(d_positions, lengths.size(), reinterpret_cast<unsigned char*>(chars.data()), chars.size());
+
+	unsigned char* d_wordArray;
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_wordArray), chars.size()));
+	checkCudaErrors(cudaMemcpy(d_wordArray, chars.data(), chars.size(), cudaMemcpyHostToDevice));
+
+	const auto output = create_output(d_wordArray, chars.size(), d_positions, lengths.size());
+
+	bool output_result = test_output(d_wordArray, chars.size(), output);
+
+	if (!output_result || !sorting_result)
+		throw exception();
 }
 
 int main(int argc, char **argv)
@@ -147,7 +154,7 @@ int main(int argc, char **argv)
 	//auto z1 = ct.get_value(toFind, sizeof(toFind) / sizeof(int));
 	//auto z2 = cte.get_value(toFind, sizeof(toFind) / sizeof(int));
 	//auto z3 = gt.get_value(toFind, sizeof(toFind) / sizeof(int));
-	////ct and cte should be equal
+	//ct and cte should be equal
 
 	vector<int> wordPositions;
 	vector<int> wordLengths;
@@ -160,6 +167,20 @@ int main(int argc, char **argv)
 	int charCount;
 	ReadFile(h_wordPositions, h_wordLengths, wordPositions, wordLengths, h_wordArray, wordCount, charCount);
 
-	//test_random_strings();
-	SortStrings(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
+	test_random_strings();
+
+	int* d_positions = get_sorted_positions(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
+
+	bool sorting_result = test_string_sorting(d_positions, wordCount, h_wordArray, charCount);
+
+	unsigned char* d_wordArray;
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_wordArray), charCount));
+	checkCudaErrors(cudaMemcpy(d_wordArray, h_wordArray, charCount, cudaMemcpyHostToDevice));
+
+	const auto output = create_output(d_wordArray, charCount, d_positions, wordCount);
+
+	bool output_result = test_output(d_wordArray, charCount, output);
+
+	if (!output_result || !sorting_result)
+		throw exception();
 }

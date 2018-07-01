@@ -7,6 +7,7 @@
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="tests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bplus_tree.h" />
@@ -14,6 +15,8 @@
     <ClInclude Include="bplus_tree_gpu.cuh" />
     <ClInclude Include="gpu_helper.cuh" />
     <ClInclude Include="not_implemented.h" />
-    <ClInclude Include="SortingsTests.h" />
+    <ClInclude Include="parameters.h" />
+    <ClInclude Include="helpers.h" />
+    <ClInclude Include="functions.h" />
   </ItemGroup>
 </Project>
