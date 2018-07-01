@@ -76,22 +76,9 @@ bool test_string_sorting(int * d_positions, const int word_count, unsigned char 
 	return fails == 0;
 }
 
-bool test_output(unsigned char* d_word_array, const int chars_input_count, const sorting_output output)
+bool test_output(unsigned char* h_word_array, const int chars_input_count, const sorting_output output)
 {
-	vector<unsigned char> initial_words = create_vector(d_word_array, chars_input_count);
-	const string words(initial_words.begin(), initial_words.end());
-	istringstream iss_words(words);
-	vector<string> words_split(istream_iterator<string>{iss_words}, istream_iterator<string>());
-
-	for (auto& i : words_split)
-		std::transform(i.begin(), i.end(), i.begin(), ::tolower);
-
-	std::sort(words_split.begin(), words_split.end());
-
-	const auto it = std::unique(words_split.begin(), words_split.end());
-	words_split.resize(std::distance(words_split.begin(), it));
-
-	std::sort(words_split.begin(), words_split.end());
+	auto words_split = get_sorted_cpu_words(h_word_array, chars_input_count);
 
 	vector<ullong> hashes(words_split.size());
 	std::transform(words_split.begin(), words_split.end(), hashes.begin(), cpu_hash);
