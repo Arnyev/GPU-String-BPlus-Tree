@@ -23,15 +23,12 @@ inline ullong cpu_hash(std::string s)
 	{
 		const unsigned char c = s[i];
 		if (c == '\0')
-		{
 			break;
-		}
+
 		hash *= ALPHABETSIZE;
-		if (c >= ASCIILOWSTART)
-			hash += c - ASCIILOWSTART;
-		else
-			hash += c - ASCIIUPSTART;
+		hash += c & CHARMASK;
 	}
+
 	const ullong mask = s[i] == '\0' ? 0 : 1;
 
 	for (; i < CHARSTOHASH; i++)
@@ -58,7 +55,8 @@ inline void compute_grid_size(uint n, uint block_size, uint &num_blocks, uint &n
 	num_blocks = (n % num_threads != 0) ? (n / num_threads + 1) : (n / num_threads);
 }
 
-inline int get_segment_size(uint max_segment)
+template <class T1>
+int get_segment_size(T1 max_segment)
 {
 	int segment_size;
 	if (max_segment == 0)
@@ -66,7 +64,7 @@ inline int get_segment_size(uint max_segment)
 	else
 	{
 		segment_size = 32;
-		const uint flag = 1UL << 31;
+		const T1 flag = static_cast<T1>(1) << sizeof(T1) * 8 - 1;
 		while ((max_segment&flag) == 0)
 		{
 			max_segment <<= 1;

@@ -46,7 +46,7 @@ int GetStartingPosition(const unsigned char * buffer)
 	return startingPosition;
 }
 
-bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPositions, vector<int>& wordLengths, unsigned char *&h_wordArray, int& wordCount, int& charCount)
+bool ReadFile(int*& h_word_positions, int*& h_wordLengths, vector<int>& wordPositions, vector<int>& wordLengths, unsigned char *&h_wordArray, int& wordCount, int& charCount)
 {
 	unsigned char * buffer = 0;
 	size_t length;
@@ -61,9 +61,9 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 	bool currentlyOnNotAlphaSeq = false;
 	for (ullong i = starting_position; i < length; i++)
 	{
-		unsigned char c = buffer[i];
+		const unsigned char c = buffer[i];
 
-		if ((c > 64 && c < 91) || (c > 96 && c < 123))//is alpha
+		if (c > 64 && c < 91 || c > 96 && c < 123)//is alpha
 		{
 			if (currentlyOnNotAlphaSeq)
 			{
@@ -77,64 +77,19 @@ bool ReadFile(int*& h_wordPositions, int*& h_wordLengths, vector<int>& wordPosit
 		}
 		else if (!currentlyOnNotAlphaSeq)
 		{
-			buffer[writeIndex] = ' ';
+			buffer[writeIndex] = BREAKCHAR;
 			writeIndex++;
 			currentlyOnNotAlphaSeq = true;
 		}
 	}
 	wordLengths.push_back(writeIndex - wordStart);
-	buffer[writeIndex] = ' ';
-	h_wordPositions = wordPositions.data();
+	buffer[writeIndex] = BREAKCHAR;
+	h_word_positions = wordPositions.data();
 	h_wordArray = buffer;
 	h_wordLengths = wordLengths.data();
 	wordCount = wordLengths.size();
 	charCount = writeIndex + 1;
 	return true;
-}
-
-void test_random_strings()
-{
-	vector<vector<char>> strings(1000000);
-	int len = 0;
-	const char charset[] = "abc";
-	const int sizer = sizeof charset - 1;
-	for (int j = 0; j < 1000000; j++)
-	{
-		const int lena = rand() % RANDSTRMAXLEN + 1;
-		strings[j].reserve(lena);
-		for (int i = 0; i < lena; i++)
-			strings[j].push_back(charset[rand() % sizer]);
-
-		len += strings[j].size() + 1;
-	}
-	vector<char> vecc{};
-	vecc.reserve(len);
-	vector<int> positions(strings.size());
-	vector<int> lengths(strings.size());
-	vector<char> chars(len);
-	int currentPosition = 0;
-	for (uint k = 0; k < strings.size(); k++)
-	{
-		positions[k] = currentPosition;
-		lengths[k] = strings[k].size();
-		for (int l = 0; l < lengths[k]; l++)
-			chars[currentPosition++] = strings[k][l];
-		chars[currentPosition++] = ' ';
-	}
-	int* d_positions = get_sorted_positions(reinterpret_cast<unsigned char*>(chars.data()), positions.data(), lengths.data(), lengths.size(), chars.size());
-
-	const bool sorting_result = test_string_sorting(d_positions, lengths.size(), reinterpret_cast<unsigned char*>(chars.data()), chars.size());
-
-	unsigned char* d_wordArray;
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_wordArray), chars.size()));
-	checkCudaErrors(cudaMemcpy(d_wordArray, chars.data(), chars.size(), cudaMemcpyHostToDevice));
-
-	const auto output = create_output(d_wordArray, d_positions, lengths.size());
-
-	const bool output_result = test_output(reinterpret_cast<uchar*>(chars.data()), chars.size(), output);
-
-	if (!output_result || !sorting_result)
-		throw exception();
 }
 
 int main(int argc, char **argv)
@@ -167,20 +122,30 @@ int main(int argc, char **argv)
 	int charCount;
 	ReadFile(h_wordPositions, h_wordLengths, word_positions, word_lengths, h_wordArray, wordCount, charCount);
 
+	cout << "Randoms" << endl;
 	test_random_strings();
 
-	int* d_positions = get_sorted_positions(h_wordArray, h_wordPositions, h_wordLengths, wordCount, charCount);
-
-	const bool sorting_result = test_string_sorting(d_positions, wordCount, h_wordArray, charCount);
+	cout << "Moby Dick" << endl;
 
 	unsigned char* d_wordArray;
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_wordArray), charCount));
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_wordArray), charCount + CHARSTOHASH));
 	checkCudaErrors(cudaMemcpy(d_wordArray, h_wordArray, charCount, cudaMemcpyHostToDevice));
 
-	const auto output = create_output(d_wordArray, d_positions, wordCount);
+	int* d_wordPositions;
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_wordPositions), sizeof(int)*wordCount));
+	checkCudaErrors(cudaMemcpy(d_wordPositions, h_wordPositions, sizeof(int)*wordCount, cudaMemcpyHostToDevice));
 
+	int* d_sorted_positions = get_sorted_positions(d_wordPositions, wordCount, d_wordArray);
+	const bool sorting_result = test_string_sorting(d_sorted_positions, wordCount, h_wordArray, charCount);
+
+	const auto output = create_output(d_wordArray, d_sorted_positions, wordCount);
 	const bool output_result = test_output(h_wordArray, charCount, output);
 
 	if (!output_result || !sorting_result)
+	{
+		cout << "Fail" << endl;
 		throw exception();
+	}
+	else
+		cout << "Win" << endl;
 }
