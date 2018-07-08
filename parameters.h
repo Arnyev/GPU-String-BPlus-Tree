@@ -15,7 +15,8 @@ typedef unsigned int uint;
 #define ALPHABETSIZE 27
 #define ASCIILOWSTART 96
 #define ASCIIUPSTART 64
-#define BLOCKSIZE 256
+#define BLOCKSIZE 512
 #define KEYBITS 64
 #define CHARBITS 5
 #define CHARMASK ~static_cast<uchar>(3 << 5);
+#define WRITETIME 1

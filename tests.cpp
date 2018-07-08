@@ -99,7 +99,7 @@ bool test_random_strings()
 	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_word_array), cur_char_index + CHARSTOHASH));
 	checkCudaErrors(cudaMemcpy(d_word_array, h_chars, cur_char_index, cudaMemcpyHostToDevice));
 	int* d_word_positions;
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_word_positions), sizeof(int)*cur_word_index));
+	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_word_positions), sizeof(int)*(cur_word_index + 1)));
 	checkCudaErrors(cudaMemcpy(d_word_positions, h_positions, sizeof(int)*cur_word_index, cudaMemcpyHostToDevice));
 
 	const auto d_sorted_positions = get_sorted_positions(d_word_positions, cur_word_index, d_word_array);
