@@ -7,6 +7,7 @@
 #include <thrust/unique.h>
 #include <thrust/device_malloc.h>
 #include <thrust/transform_scan.h>
+#include <thrust/device_free.h>
 
 using namespace thrust;
 using namespace std;
@@ -119,23 +120,6 @@ __global__ void create_consecutive_numbers_d(int* numbers, const int max_number)
 	numbers[thread_num] = thread_num;
 }
 
-__global__ void scatter_values_d(ullong* keys_in, ullong* keys_out, int* word_positions_in, int* word_positions_out,
-                                 int* destinations_in, int* destinations_out, uchar* flags, int* positions,
-                                 const int word_count)
-{
-	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
-	if (thread_num >= word_count)
-		return;
-
-	if (!flags[thread_num])
-		return;
-
-	const int position = positions[thread_num];
-	destinations_out[position] = destinations_in[thread_num];
-	word_positions_out[position] = word_positions_in[thread_num];
-	keys_out[position] = keys_in[thread_num];
-}
-
 template <class T1,class T2>
 __global__ void flag_different_than_last_d(T1* keys, T2* segments, const int word_count)
 {
@@ -143,21 +127,7 @@ __global__ void flag_different_than_last_d(T1* keys, T2* segments, const int wor
 	if (thread_num >= word_count)
 		return;
 
-	segments[thread_num] = 0;
-
-	if (keys[thread_num] == 0)
-	{
-		return;
-	}
-
-	if (thread_num == 0)
-	{
-		segments[thread_num] = 1;
-		return;
-	}
-
-	if (keys[thread_num] != keys[thread_num - 1])
-		segments[thread_num] = 1;
+	segments[thread_num] = thread_num == 0 || keys[thread_num] != keys[thread_num - 1] ? 1 : 0;
 }
 
 __global__ void compute_postfix_lengths_d(uchar* words, int* positions, const int word_count, int* lengths)
@@ -211,9 +181,16 @@ __global__ void copy_suffixes(uchar* words, int* positions, const int word_count
 		suffixes[suffix_pos + i] = words[position + i];
 }
 
-struct equal_to_minus_one : thrust::unary_function<int, int>
+template<class T>
+struct equal_to_minus_one : thrust::unary_function<T, T>
 {
-	__host__ __device__ int operator()(const int x) const { return x == -1; }
+	__host__ __device__ T operator()(const T x) const { return x == -1; }
+};
+
+template<class T>
+struct equal_to_zero : thrust::unary_function<T, T>
+{
+	__host__ __device__ T operator()(const T x) const { return x == 0; }
 };
 
 struct hash_functor: thrust::unary_function<int, ullong>
@@ -264,8 +241,8 @@ struct compute_postfix_length_functor : thrust::unary_function<int, int>
 	}
 };
 
-void create_hashes(unsigned char* d_word_array, const device_ptr<int> sorted_positions, 
-                   const device_ptr<int> positions_end, const device_ptr<unsigned long long> hashes)
+void create_hashes(uchar* d_word_array, const device_ptr<int> sorted_positions, const device_ptr<int> positions_end,
+                   const device_ptr<ullong> hashes)
 {
 	cudaEvent_t start;
 	cudaEvent_t stop;
@@ -296,7 +273,7 @@ sorting_output create_output(unsigned char* d_word_array, int* d_sorted_position
 {
 	const device_ptr<int> sorted_positions(d_sorted_positions);
 
-	const auto positions_end = remove_if(sorted_positions, device_ptr<int>(d_sorted_positions + word_count), equal_to_minus_one());
+	const auto positions_end = remove_if(sorted_positions, device_ptr<int>(d_sorted_positions + word_count), equal_to_minus_one<int>());
 
 	word_count = positions_end - sorted_positions;
 
@@ -324,8 +301,8 @@ sorting_output create_output(unsigned char* d_word_array, int* d_sorted_position
 	return { hashes.get(), suffix_positions.get(), suffixes.get(), hashes_count, output_size };
 }
 
-__global__ void reposition_strings_d(unsigned char* d_word_array_in, unsigned char* 
-                                     d_word_array_out, int* d_position_in, int* d_position_out, const int word_count)
+__global__ void reposition_strings_d(unsigned char* d_word_array_in, unsigned char* d_word_array_out,
+                                     int* d_position_in, int* d_position_out, const int word_count)
 {
 	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
 	if (thread_num >= word_count)
@@ -344,94 +321,8 @@ __global__ void reposition_strings_d(unsigned char* d_word_array_in, unsigned ch
 	} while (c != BREAKCHAR);
 }
 
-void scatter_values(ullong* & d_keys, int*& d_destinations, int* & d_word_positions, const int old_word_count,
-                    const int new_word_count, uchar* d_flags, int* d_scatter_map)
-{
-	cudaEvent_t start;
-	cudaEvent_t stop;
-	float milliseconds = 0;
-
-	if (WRITETIME)
-	{
-		cudaEventCreate(&start);
-		cudaEventCreate(&stop);
-		cudaDeviceSynchronize();
-		cudaEventRecord(start);
-	}
-
-	uint num_threads, num_blocks;
-	compute_grid_size(old_word_count, BLOCKSIZE, num_blocks, num_threads);
-
-	ullong* d_keys_new;
-	int* d_destinations_new;
-	int* d_word_positions_new;
-
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_keys_new), sizeof(ullong)*new_word_count));
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_word_positions_new), sizeof(int)*new_word_count));
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_destinations_new), sizeof(int)*new_word_count));
-
-	scatter_values_d << <num_blocks, num_threads >> > (d_keys, d_keys_new, d_word_positions, d_word_positions_new,
-	                                                   d_destinations, d_destinations_new, d_flags, d_scatter_map, old_word_count);
-
-	getLastCudaError("Scatter values failed.");
-	cudaDeviceSynchronize();
-	checkCudaErrors(cudaFree(d_destinations));
-	checkCudaErrors(cudaFree(d_keys));
-	checkCudaErrors(cudaFree(d_word_positions));
-
-	d_destinations = d_destinations_new;
-	d_word_positions = d_word_positions_new;
-	d_keys = d_keys_new;
-
-	if (WRITETIME)
-	{
-		cudaEventRecord(stop);
-		cudaEventSynchronize(stop);
-		cudaEventElapsedTime(&milliseconds, start, stop);
-		std::cout << "Scattering took " << milliseconds << " milliseconds" << endl;
-		cudaEventDestroy(start);
-		cudaEventDestroy(stop);
-	}
-}
-
-int get_new_active_count(uchar* d_flags, int* d_helper, const int old_count)
-{
-	cudaEvent_t start;
-	cudaEvent_t stop;
-	float milliseconds = 0;
-
-	if (WRITETIME)
-	{
-		cudaEventCreate(&start);
-		cudaEventCreate(&stop);
-		cudaDeviceSynchronize();
-		cudaEventRecord(start);
-	}
-
-	int current_count;
-	uchar last_flag;
-	checkCudaErrors(cudaMemcpy(&last_flag, d_flags + old_count - 1, 1, cudaMemcpyDeviceToHost));
-	checkCudaErrors(cudaMemcpy(&current_count, d_helper + old_count - 1, 4, cudaMemcpyDeviceToHost));
-	cout << "Current count is " << current_count << endl;
-	if (last_flag)
-		current_count += 1;
-
-	if (WRITETIME)
-	{
-		cudaEventRecord(stop);
-		cudaEventSynchronize(stop);
-		cudaEventElapsedTime(&milliseconds, start, stop);
-		std::cout << "Getting active count took " << milliseconds << " milliseconds" << endl;
-		cudaEventDestroy(start);
-		cudaEventDestroy(stop);
-	}
-
-	return current_count;
-}
-
 template <class T1>
-void mark_singletons(ullong* d_keys, int* d_word_positions, int* d_destinations, T1* d_flags, int* d_output,
-                     int current_count)
+void mark_singletons(ullong* d_keys, int* d_word_positions, int* d_destinations, T1* d_flags, int* d_output, int current_count)
 {
 	cudaEvent_t start;
 	cudaEvent_t stop;
@@ -462,16 +353,8 @@ void mark_singletons(ullong* d_keys, int* d_word_positions, int* d_destinations,
 	}
 }
 
-struct different_than_last_binary : thrust::binary_function<ullong, ullong, ullong>
-{
-	__device__ ullong operator()(ullong v1, ullong v2) const
-	{
-		return v1 == v2 ? 0ULL : 1ULL;
-	}
-};
-
-template <class T1>
-void flags_different_than_last(ullong* d_keys, T1* d_flags, int current_count)
+template <class T>
+void flags_different_than_last(ullong* d_keys, T* d_flags, int current_count)
 {
 	cudaEvent_t start;
 	cudaEvent_t stop;
@@ -488,9 +371,9 @@ void flags_different_than_last(ullong* d_keys, T1* d_flags, int current_count)
 	uint num_threads;
 	uint num_blocks;
 	compute_grid_size(current_count, BLOCKSIZE, num_blocks, num_threads);
+
 	flag_different_than_last_d << <num_blocks, num_threads >> > (d_keys, d_flags, current_count);
-	//transform(device, device_ptr<ullong>(d_keysOut + 1), device_ptr<ullong>(d_keysOut + currentCount),
-	//	device_ptr<ullong>(d_keysOut), device_ptr<ullong>(d_segments + 1), different_than_last_binary());
+	getLastCudaError("Finding different flags failed.");
 
 	if (WRITETIME)
 	{
@@ -574,7 +457,7 @@ void create_consecutive_numbers(const int word_count, int* d_destinations)
 	}
 }
 
-void sort_wrapper(int* d_word_positions, ullong* d_keys, int current_count)
+void sort_wrapper(const device_ptr<ullong> keys, const device_ptr<int> positions, const int current_count)
 {
 	cudaEvent_t start;
 	cudaEvent_t stop;
@@ -588,7 +471,7 @@ void sort_wrapper(int* d_word_positions, ullong* d_keys, int current_count)
 		cudaEventRecord(start);
 	}
 
-	sort_by_key(device_ptr<ullong>(d_keys), device_ptr<ullong>(d_keys + current_count), device_ptr<int>(d_word_positions));
+	sort_by_key(keys, keys + current_count, positions);
 
 	if (WRITETIME)
 	{
@@ -601,8 +484,8 @@ void sort_wrapper(int* d_word_positions, ullong* d_keys, int current_count)
 	}
 }
 
-void exclusive_scan_wrapper(const device_ptr<uchar> d_flags, const device_ptr<uchar> d_flags_end,
-                            const device_ptr<int> d_output)
+int remove_handled(const device_ptr<int> positions, const device_ptr<ullong> keys, const device_ptr<int> destinations,
+	const device_ptr<int> helper, const int current_count)
 {
 	cudaEvent_t start;
 	cudaEvent_t stop;
@@ -616,17 +499,24 @@ void exclusive_scan_wrapper(const device_ptr<uchar> d_flags, const device_ptr<uc
 		cudaEventRecord(start);
 	}
 
-	exclusive_scan(d_flags, d_flags_end, d_output);
+	const auto iter_start = make_zip_iterator(thrust::make_tuple(keys, positions, destinations));
+
+	const auto iter_end = make_zip_iterator(
+		thrust::make_tuple(keys + current_count, positions + current_count, destinations + current_count));
+
+	const auto new_end = remove_if(iter_start, iter_end, helper, equal_to_zero<uchar>());
 
 	if (WRITETIME)
 	{
 		cudaEventRecord(stop);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&milliseconds, start, stop);
-		std::cout << "Exclusive scan took " << milliseconds << " milliseconds" << endl;
+		std::cout << "Removing handled took " << milliseconds << " milliseconds" << endl;
 		cudaEventDestroy(start);
 		cudaEventDestroy(stop);
 	}
+
+	return new_end - iter_start;
 }
 
 int* get_sorted_positions(int* d_positions, const int word_count, unsigned char* d_chars)
@@ -638,18 +528,12 @@ int* get_sorted_positions(int* d_positions, const int word_count, unsigned char*
 	float milliseconds;
 	cudaEventRecord(start);
 
-	ullong* d_keys;
-	int* d_destinations;
-	uchar* d_flags;
-	int* d_helper;
-	int* d_output;
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_keys), sizeof(ullong)*word_count));
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_destinations), sizeof(int)*word_count));
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_flags), sizeof(uchar)*word_count));
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_helper), sizeof(int)*word_count));
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_output), sizeof(int)*word_count));
+	auto keys = device_malloc<ullong>(word_count);
+	auto destinations = device_malloc<int>(word_count);
+	auto helper = device_malloc<int>(word_count);
+	auto output = device_malloc<int>(word_count);
 
-	create_consecutive_numbers(word_count, d_destinations);
+	create_consecutive_numbers(word_count, destinations.get());
 
 	int offset = 0;
 	int segment_size = 0;
@@ -658,30 +542,25 @@ int* get_sorted_positions(int* d_positions, const int word_count, unsigned char*
 	while (true)
 	{
 		const int seg_chars = ceil(static_cast<double>(segment_size) / CHARBITS);
-		create_hashes_with_seg(d_keys, d_chars, d_positions, d_helper, offset, segment_size, current_count, seg_chars);
+		create_hashes_with_seg(keys.get(), d_chars, d_positions, helper.get(), offset, segment_size, current_count, seg_chars);
 		offset += CHARSTOHASH - seg_chars;
 
-		sort_wrapper(d_positions, d_keys, current_count);
+		sort_wrapper(keys, device_ptr<int>(d_positions), current_count);
 
-		mark_singletons(d_keys, d_positions, d_destinations, d_flags, d_output, current_count);
-		exclusive_scan_wrapper(device_ptr<uchar>(d_flags), device_ptr<uchar>(d_flags + current_count), device_ptr<int>(d_helper));
+		mark_singletons(keys.get(), d_positions, destinations.get(), helper.get(), output.get(), current_count);
 
-		const int new_count = get_new_active_count(d_flags, d_helper, current_count);
-		scatter_values(d_keys, d_destinations, d_positions, current_count, new_count, d_flags, d_helper);
-
-		current_count = new_count;
+		current_count = remove_handled(device_ptr<int>(d_positions), keys, destinations, helper, current_count);
 		if (current_count == 0)
 			break;
 
-		flags_different_than_last(d_keys, d_helper, current_count);
-		inclusive_scan(device_ptr<int>(d_helper), device_ptr<int>(d_helper + current_count), device_ptr<int>(d_helper));
-		segment_size = compute_segment_size(d_helper, current_count);
+		flags_different_than_last(keys.get(), helper.get(), current_count);
+		inclusive_scan(helper, helper + current_count, helper);
+		segment_size = compute_segment_size(helper.get(), current_count);
 	}
 
-	checkCudaErrors(cudaFree(d_keys));
-	checkCudaErrors(cudaFree(d_destinations));
-	checkCudaErrors(cudaFree(d_flags));
-	checkCudaErrors(cudaFree(d_helper));
+	device_free(keys);
+	device_free(destinations);
+	device_free(helper);
 
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
@@ -690,5 +569,5 @@ int* get_sorted_positions(int* d_positions, const int word_count, unsigned char*
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
 
-	return d_output;
+	return output.get();
 }
