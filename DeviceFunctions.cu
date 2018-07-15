@@ -8,6 +8,7 @@
 #include <thrust/device_malloc.h>
 #include <thrust/transform_scan.h>
 #include <thrust/device_free.h>
+#include "DeviceFunctions.cuh"
 
 using namespace thrust;
 using namespace std;

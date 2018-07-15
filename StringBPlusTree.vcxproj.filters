@@ -18,5 +18,6 @@
     <ClInclude Include="parameters.h" />
     <ClInclude Include="helpers.h" />
     <ClInclude Include="functions.h" />
+    <ClInclude Include="DeviceFunctions.cuh" />
   </ItemGroup>
 </Project>

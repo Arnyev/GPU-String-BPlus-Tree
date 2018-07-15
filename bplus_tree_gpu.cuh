@@ -162,6 +162,7 @@ template <class HASH, int B>
 class bplus_tree_gpu : public bplus_tree<HASH, B>
 {
 public:
+	char* suffixes;
 	int* indexesArray;
 	HASH* keysArray;
 	int* sizeArray;
@@ -171,7 +172,7 @@ public:
 	int rootNodeIndex;
 	int height;
 protected:
-	void create_tree(HASH* hashes, int* values, int size) override;
+	void create_tree(HASH* hashes, int* values, int size, char* suffixes, int suffixesLength) override;
 public:
 	bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree);
 	bplus_tree_gpu(HASH* hashes, int* values, int size);
@@ -191,19 +192,21 @@ public:
 };
 
 template <class HASH, int B>
-void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size)
+void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size, char* suffixes, int suffixesLength)
 {
 	height = 0;
 	const int elementNum = size; //Number of hashes
 	reservedNodes = needed_nodes(size);
 	HASH* d_hashes;
 	int* d_values;
+	gpuErrchk(cudaMalloc(&(this->suffixes), suffixesLength * sizeof(char)));
 	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
 	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
 	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
 	gpuErrchk(cudaMalloc(&minArray, reservedNodes * sizeof(int)));
 	gpuErrchk(cudaMalloc(&d_hashes, size * sizeof(HASH)));
 	gpuErrchk(cudaMalloc(&d_values, size* sizeof(int)));
+	gpuErrchk(cudaMemcpy(this->suffixes, suffixes, sizeof(char) * suffixesLength, cudaMemcpyHostToDevice)); //Suffixes are copied to this->suffixes
 	gpuErrchk(cudaMemcpy(d_hashes, hashes, sizeof(HASH) * size, cudaMemcpyHostToDevice)); //Keys are copied to d_hashes
 	gpuErrchk(cudaMemcpy(d_values, values, sizeof(int) * size, cudaMemcpyHostToDevice)); //Values are copied to d_values
 
@@ -253,7 +256,7 @@ bplus_tree_gpu<HASH, B>::bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree)
 template <class HASH, int B>
 bplus_tree_gpu<HASH, B>::bplus_tree_gpu(HASH* hashes, int* values, int size)
 {
-	create_tree(hashes, values, size);
+	create_tree(hashes, values, size, nullptr, 0);
 }
 
 template <class HASH, int B>

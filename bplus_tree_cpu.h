@@ -9,6 +9,7 @@
 #include "bplus_tree_gpu.cuh"
 #include "gpu_helper.cuh"
 #include "not_implemented.h"
+#include "DeviceFunctions.cuh"
 
 template <class HASH, int B>
 class bplus_tree_cpu : public bplus_tree<HASH, B> 
@@ -16,6 +17,7 @@ class bplus_tree_cpu : public bplus_tree<HASH, B>
 	const int EXTEND_SIZE = 16;
 	using index_array = std::array<int, B + 1>;
 	using key_array = std::array<HASH, B>;
+	std::vector<char> suffixes;
 	std::vector<index_array> indexesArray;
 	std::vector<key_array> keysArray;
 	std::vector<int> sizeArray;
@@ -76,17 +78,20 @@ class bplus_tree_cpu : public bplus_tree<HASH, B>
 	 */
 	bool inner_insert(HASH& key, int& value, int node, int height, bool &success);
 protected:
-	void create_tree(HASH* keys, int* values, int size) override;
+	void create_tree(HASH* keys, int* values, int size, char* suffixes, int suffixesLength) override;
 
 	int get_leaf(HASH key);
 public:
 	bplus_tree_cpu(bplus_tree_gpu<HASH, B>& gpu_tree);
 	bplus_tree_gpu<HASH, B> export_to_gpu();
 
-	bplus_tree_cpu(HASH* keys, int* values, int size);
+	bplus_tree_cpu(HASH* keys, int* values, int size, char* suffixes, int suffixesLength);
 
 	bool exist(HASH key) override;
 	std::vector<bool> exist(HASH* keys, int size) override;
+
+	bool exist_word(char *word) override;
+	std::vector<bool> exist_word(char *words, int *beginIndexes, int size) override;
 
 	int get_value(HASH key) override;
 	std::vector<int> get_value(HASH* keys, int size) override;
@@ -356,9 +361,10 @@ bool bplus_tree_cpu<HASH, B>::inner_insert(HASH& key, int& value, int node, int 
 }
 
 template <class HASH, int B>
-void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size)
+void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size, char* suffixes, int suffixesLength)
 {
 	reservedNodes = needed_nodes(size);
+	this->suffixes = std::vector<char>(suffixes, suffixes + suffixesLength);
 	indexesArray = std::vector<index_array>(reservedNodes);
 	keysArray = std::vector<key_array>(reservedNodes);
 	sizeArray = std::vector<int>(reservedNodes);
@@ -492,9 +498,9 @@ bplus_tree_gpu<HASH, B> bplus_tree_cpu<HASH, B>::export_to_gpu()
 }
 
 template <class HASH, int B>
-bplus_tree_cpu<HASH, B>::bplus_tree_cpu(HASH* keys, int* values, int size)
+bplus_tree_cpu<HASH, B>::bplus_tree_cpu(HASH* keys, int* values, int size, char* suffixes, int suffixesLength)
 {
-	bplus_tree_cpu<HASH, B>::create_tree(keys, values, size);
+	bplus_tree_cpu<HASH, B>::create_tree(keys, values, size, suffixes, suffixesLength);
 }
 
 template <class HASH, int B>
@@ -510,6 +516,41 @@ std::vector<bool> bplus_tree_cpu<HASH, B>::exist(HASH* keys, int size)
 	std::vector<bool> tmp(size);
 	std::transform(values.begin(), values.end(), tmp.begin(), [](int i) -> bool {return i >= 0; });
 	return tmp;
+}
+
+template <class HASH, int B>
+bool bplus_tree_cpu<HASH, B>::exist_word(char* word)
+{
+	const char nullByte = static_cast<char>(0);
+	const int maxLen = 13;
+	const int wordLen = strlen(word);
+	const ullong hash = get_hash(reinterpret_cast<uchar*>(word), std::min(maxLen, wordLen), 0);
+	const int index = get_value(hash);
+	if (index < 0)
+		return false;
+	if (wordLen <= maxLen)
+		return true;
+	char *wordIt = word + maxLen;
+	auto suffixesIt = suffixes.begin() + index;
+	while (*suffixesIt != nullByte && *wordIt != nullByte)
+	{
+		if (*suffixesIt != *wordIt)
+			return false;
+		++suffixesIt;
+		++wordIt;
+	}
+	return *suffixesIt == nullByte && *wordIt == nullByte;
+}
+
+template <class HASH, int B>
+std::vector<bool> bplus_tree_cpu<HASH, B>::exist_word(char* words, int* beginIndexes, int size)
+{
+	std::vector<bool> result(size);
+	for (int i = 0; i < size; ++i)
+	{
+		result[i] = exist_word(words + beginIndexes[i]);
+	}
+	return result;
 }
 
 template <class HASH, int B>
