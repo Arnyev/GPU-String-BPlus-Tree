@@ -11,7 +11,7 @@
 
 using namespace std;
 
-bool  ReadFileToBuffer(size_t &length, unsigned char * &buffer)
+bool read_file_to_buffer(size_t &length, unsigned char * &buffer)
 {
 	FILE * f = fopen(FILEPATH, "rb");
 
@@ -50,7 +50,7 @@ bool ReadFile(int*& h_word_positions, int*& h_wordLengths, vector<int>& wordPosi
 {
 	unsigned char * buffer = 0;
 	size_t length;
-	if (!ReadFileToBuffer(length, buffer))
+	if (!read_file_to_buffer(length, buffer))
 		return false;
 
 	const int starting_position = GetStartingPosition(buffer);

@@ -49,12 +49,6 @@ inline int postfix_len_from_str(std::string str)
 	return c - CHARSTOHASH + 1;
 }
 
-inline void compute_grid_size(uint n, uint block_size, uint &num_blocks, uint &num_threads)
-{
-	num_threads = block_size < n ? block_size : n;
-	num_blocks = (n % num_threads != 0) ? (n / num_threads + 1) : (n / num_threads);
-}
-
 template <class T1>
 int get_segment_size(T1 max_segment)
 {
@@ -64,7 +58,7 @@ int get_segment_size(T1 max_segment)
 	else
 	{
 		segment_size = 32;
-		const T1 flag = static_cast<T1>(1) << sizeof(T1) * 8 - 1;
+		const T1 flag = static_cast<T1>(1) << (sizeof(T1) * 8 - 1);
 		while ((max_segment&flag) == 0)
 		{
 			max_segment <<= 1;
@@ -73,4 +67,11 @@ int get_segment_size(T1 max_segment)
 	}
 
 	return segment_size;
+}
+
+inline int compute_segment_size(int* d_helper, const int current_count)
+{
+	int max_segment;
+	checkCudaErrors(cudaMemcpy(&max_segment, d_helper + current_count - 1, sizeof(int), cudaMemcpyDeviceToHost));
+	return get_segment_size(max_segment);
 }

@@ -47,3 +47,53 @@ __host__ __device__ T my_max(T a, T b)
 	return (a > b ? a : b);
 }
 
+#define MEASURETIME(function, name)													\
+{																					\
+	cudaEvent_t start;																\
+	cudaEvent_t stop;																\
+	float milliseconds = 0;															\
+	if (WRITETIME)																	\
+	{																				\
+		checkCudaErrors(cudaEventCreate(&start));									\
+		checkCudaErrors(cudaEventCreate(&stop));									\
+		checkCudaErrors(cudaDeviceSynchronize());									\
+		checkCudaErrors(cudaEventRecord(start));									\
+	}																				\
+    (function);																		\
+	if (WRITETIME)																	\
+	{																				\
+		checkCudaErrors(cudaEventRecord(stop));										\
+		checkCudaErrors(cudaEventSynchronize(stop));								\
+		checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));			\
+		std::cout << name << " took " << milliseconds << " ms" << std::endl;		\
+		checkCudaErrors(cudaEventDestroy(start));									\
+		checkCudaErrors(cudaEventDestroy(stop));									\
+	}																				\
+}
+
+#define MEASURETIMEKERNEL(function,name,threadCount,...)							\
+{																					\
+	cudaEvent_t start;																\
+	cudaEvent_t stop;																\
+	float milliseconds = 0;															\
+	if (WRITETIME)																	\
+	{																				\
+		checkCudaErrors(cudaEventCreate(&start));									\
+		checkCudaErrors(cudaEventCreate(&stop));									\
+		checkCudaErrors(cudaDeviceSynchronize());									\
+		checkCudaErrors(cudaEventRecord(start));									\
+	}																				\
+	uint num_threads, num_blocks;													\
+	compute_grid_size(threadCount, BLOCKSIZE, num_blocks, num_threads);				\
+	function kernel_init(num_blocks, num_threads) (__VA_ARGS__);					\
+	getLastCudaError(name " failed.");												\
+	if (WRITETIME)																	\
+	{																				\
+		checkCudaErrors(cudaEventRecord(stop));										\
+		checkCudaErrors(cudaEventSynchronize(stop));								\
+		checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));			\
+		std::cout << name << " took " << milliseconds << " ms" << std::endl;		\
+		checkCudaErrors(cudaEventDestroy(start));									\
+		checkCudaErrors(cudaEventDestroy(stop));									\
+	}																				\
+}
