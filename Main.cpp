@@ -94,6 +94,49 @@ bool ReadFile(int*& h_word_positions, int*& h_wordLengths, vector<int>& wordPosi
 
 int main(int argc, char **argv)
 {
+	using hash = ullong;
+	std::vector<std::string> words;
+	words.emplace_back("abc");
+	words.emplace_back("axxxxxxxxxxxxtomek");
+	words.emplace_back("axxxxxxxxxxxxjanek");
+	words.emplace_back("domek");
+	words.emplace_back("romek");
+	words.emplace_back("xds");
+	std::vector<hash> hashes;
+	std::vector<int> indexes;
+	std::vector<char> suffixes;
+	std::string concat;
+	std::vector<int> beginIndexes;
+	const char nullbyte = static_cast<char>(0);
+	int suffixIndex = 0;
+	int nextIndex = 0;
+	for (auto& word : words)
+	{
+		int length = 0;
+		hash h = get_hash(reinterpret_cast<const uchar*>(word.c_str()), CHARSTOHASH, 0);
+		if (word.length() > CHARSTOHASH)
+		{
+			for (auto it = word.begin() + CHARSTOHASH; it != word.end(); ++it)
+			{
+				suffixes.emplace_back(*it);
+				++length;
+			}
+		}
+		suffixes.emplace_back(nullbyte);
+		++length;
+		if (hashes.empty() || h != hashes.back())
+		{
+			hashes.emplace_back(h);
+			indexes.push_back(suffixIndex);
+		}
+		suffixIndex += length;
+		concat.append(word);
+		concat.push_back(nullbyte);
+		beginIndexes.emplace_back(nextIndex);
+		nextIndex = word.size();
+	}
+	bplus_tree_cpu<hash, 4> tree(hashes.data(), indexes.data(), hashes.size(), suffixes.data(), suffixes.size());
+	tree.exist_word("axxxxxxxxxxxxjanex");
 	//Sample creation of B+ tree
 	//int i = 0;
 	//int size = 64;

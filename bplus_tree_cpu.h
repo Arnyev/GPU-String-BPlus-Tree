@@ -9,7 +9,7 @@
 #include "bplus_tree_gpu.cuh"
 #include "gpu_helper.cuh"
 #include "not_implemented.h"
-#include "DeviceFunctions.cuh"
+#include "sort_helpers.cuh"
 
 template <class HASH, int B>
 class bplus_tree_cpu : public bplus_tree<HASH, B> 
@@ -21,7 +21,7 @@ class bplus_tree_cpu : public bplus_tree<HASH, B>
 	std::vector<index_array> indexesArray;
 	std::vector<key_array> keysArray;
 	std::vector<int> sizeArray;
-	std::vector<int> minArray;
+	std::vector<HASH> minArray;
 	int reservedNodes{};
 	int usedNodes{};
 	int rootNodeIndex{};
@@ -368,7 +368,7 @@ void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size, cha
 	indexesArray = std::vector<index_array>(reservedNodes);
 	keysArray = std::vector<key_array>(reservedNodes);
 	sizeArray = std::vector<int>(reservedNodes);
-	minArray = std::vector<int>(reservedNodes);
+	minArray = std::vector<HASH>(reservedNodes);
 	int node = 0; //Index of first not initilize node
 	int bottomPages = std::max(1, size * 2 / B);
 	const int elementsOnLastPage = size - (bottomPages - 1) * B / 2;
@@ -524,22 +524,61 @@ bool bplus_tree_cpu<HASH, B>::exist_word(char* word)
 	const char nullByte = static_cast<char>(0);
 	const int maxLen = 13;
 	const int wordLen = strlen(word);
-	const ullong hash = get_hash(reinterpret_cast<uchar*>(word), std::min(maxLen, wordLen), 0);
-	const int index = get_value(hash);
+	const ullong hash = get_hash(reinterpret_cast<uchar*>(word), CHARSTOHASH, 0);
+	int index = -1;
+	int endSuffixIndex = -1;
+	{
+		const int node = get_leaf(hash);
+		//Leaf level
+		key_array& nodeKeys = keysArray[node];
+		index_array& nodeIndexes = indexesArray[node];
+		const int size = sizeArray[node];
+		const auto found = std::lower_bound(nodeKeys.begin(), nodeKeys.begin() + size, hash);
+		if (found != nodeKeys.end() && *found == hash)
+		{
+			const int index2 = static_cast<int>(std::distance(nodeKeys.begin(), found));
+			index = nodeIndexes[index2];
+			if (index2 < size - 1) //Next element is in the same leaf
+			{
+				endSuffixIndex = nodeIndexes[index2 + 1];
+			}
+			else //Next element is in the next leaf
+			{
+				if (nodeIndexes[B] != -1) //Next leaf exists
+				{
+					endSuffixIndex = indexesArray[nodeIndexes[B]][0];
+				}
+				else //It is the last element in the last leaf
+				{
+					endSuffixIndex = suffixes.size();
+				}
+			}
+		}
+	}
 	if (index < 0)
 		return false;
 	if (wordLen <= maxLen)
 		return true;
-	char *wordIt = word + maxLen;
 	auto suffixesIt = suffixes.begin() + index;
-	while (*suffixesIt != nullByte && *wordIt != nullByte)
+	for (int suffixIndex = index; index < endSuffixIndex; ++index, ++suffixesIt)
 	{
-		if (*suffixesIt != *wordIt)
-			return false;
-		++suffixesIt;
-		++wordIt;
+		char *wordIt = word + maxLen;
+		while (*suffixesIt != nullByte && *wordIt != nullByte)
+		{
+			if (*suffixesIt != *wordIt)
+				break;
+			++suffixesIt;
+			++index;
+			++wordIt;
+		}
+		if (*suffixesIt == nullByte && *wordIt == nullByte)
+			return true;
+		while (*suffixesIt != nullByte) {
+			++suffixesIt;
+			++index;
+		}
 	}
-	return *suffixesIt == nullByte && *wordIt == nullByte;
+	return false;
 }
 
 template <class HASH, int B>

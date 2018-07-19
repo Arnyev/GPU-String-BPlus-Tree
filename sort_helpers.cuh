@@ -3,7 +3,7 @@
 #include "parameters.h"
 #include <crt/host_defines.h>
 
-__device__ __host__ __inline__ ullong get_hash(uchar* words, const int chars_to_hash, const int my_position)
+__device__ __host__ __inline__ ullong get_hash(const uchar* words, const int chars_to_hash, const int my_position)
 {
 	uchar last_bit = 1;
 	uchar char_mask = CHARMASK;
