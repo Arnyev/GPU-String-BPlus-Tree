@@ -90,11 +90,11 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="bplus_tree_gpu.cu" />
-    <CudaCompile Include="sort_strings_thrust.cu" />
-    <CudaCompile Include="sort_strings_kernels.cu" />
+    <CudaCompile Include="sort_strings.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />
+    <ClCompile Include="file_reading.cpp" />
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -103,14 +103,11 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <ClInclude Include="bplus_tree_gpu.cuh" />
     <ClInclude Include="functions.h" />
     <ClInclude Include="gpu_helper.cuh" />
-    <ClInclude Include="helpers.h" />
     <ClInclude Include="not_implemented.h" />
-    <ClInclude Include="parameters.h" />
-    <ClCompile Include="sort_strings.cpp" />
     <ClCompile Include="tests.cpp">
       <FileType>CppHeader</FileType>
     </ClCompile>
-    <ClInclude Include="sort_helpers.cuh" />
+    <ClInclude Include="parameters.h" />
     <ClInclude Include="sort_strings.cuh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

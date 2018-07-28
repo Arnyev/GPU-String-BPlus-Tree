@@ -1,129 +1,82 @@
-#include <vector>
-#include <iterator>
 #include <algorithm>
-#include <sstream>
-#include <helper_math.h>
-#include <numeric>
-#include "parameters.h"
-#include "helpers.h"
 #include "functions.h"
-#include <iostream>
+#include <string>
+#include <helper_cuda.h>
+#include "parameters.h"
+#include "gpu_helper.cuh"
+#include <unordered_set>
 
 using namespace std;
 
-vector<string> get_sorted_cpu_words(unsigned char* h_word_array, const size_t word_array_size)
+vector<string> get_sorted_cpu_words(const thrust::host_vector<uchar>& words_chars)
 {
-	vector<uchar> wordsVec(h_word_array, h_word_array + word_array_size);
-	for (auto& i : wordsVec)
-		if (i == BREAKCHAR)
-			i = SPLITTER;
+	vector<char> buf;
+	vector<string> words;
+	for (size_t i = 0; i < words_chars.size(); i++)
+	{
+		const auto c = words_chars[i];
+		if (c == BREAKCHAR)
+		{
+			if (!buf.empty())
+			{
+				words.emplace_back(buf.begin(), buf.end());
+				buf.clear();
+			}
+		}
+		else
+			buf.push_back(c);
+	}
+	sort(words.begin(), words.end());
 
-	const string words(wordsVec.begin(), wordsVec.end());
-
-	istringstream iss_words(words);
-	auto words_split = vector<string>(istream_iterator<string>{iss_words}, istream_iterator<string>());
-
-	for (auto& i : words_split)
-		std::transform(i.begin(), i.end(), i.begin(), ::tolower);
-
-	std::sort(words_split.begin(), words_split.end());
-
-	const auto it = unique(words_split.begin(), words_split.end());
-	words_split.resize(std::distance(words_split.begin(), it));
-
-	return words_split;
+	return words;
 }
 
-vector<string> get_sorted_gpu_words(int* d_positions, const int word_count, const unsigned char* h_word_array,
-	const size_t word_array_size)
+vector<string> get_sorted_unique_cpu_words(const thrust::host_vector<uchar> & words_chars)
 {
-	auto positions = create_vector(d_positions, word_count);
-	const auto word_array_out = reinterpret_cast<uchar*>(malloc(word_array_size * sizeof(uchar)));
-	int word_array_index = 0;
+	auto words = get_sorted_cpu_words(words_chars);
 
-	for (int i = 0; i < word_count; i++)
+	const auto it = unique(words.begin(), words.end());
+	words.resize(std::distance(words.begin(), it));
+
+	return words;
+}
+
+vector<string> get_sorted_gpu_words(const thrust::device_vector<int>& sorted_positions, const thrust::host_vector<uchar> & words)
+{
+	thrust::host_vector<int> positions(sorted_positions);
+	vector<string> result;
+	vector<char> word;
+
+	for (size_t i = 0; i < sorted_positions.size(); i++)
 	{
 		const int position = positions[i];
 		if (position == -1)
 			continue;
+
 		int index_in_word = 0;
 		while (true)
 		{
-			const uchar c = h_word_array[position + index_in_word];
+			const uchar c = words[position + index_in_word];
 			if (c != BREAKCHAR)
 			{
-				word_array_out[word_array_index++] = c;
+				word.push_back(c);
 				index_in_word++;
 			}
 			else
 				break;
 		}
-		word_array_out[word_array_index++] = SPLITTER;
+
+		result.emplace_back(word.begin(), word.end());
+		word.clear();
 	}
 
-	const string words_sorted_gpu(word_array_out, word_array_out + word_array_index);
-	istringstream iss_words_gpu(words_sorted_gpu);
-
-	return  vector<string>(istream_iterator<string>{iss_words_gpu}, istream_iterator<string>());
+	return result;
 }
 
-
-void generate_random_strings(int* h_positions, unsigned char* h_chars, int& cur_char_index, int& cur_word_index, const int chars_count)
+bool test_string_sorting(const thrust::device_vector<int>& sorted_positions, const thrust::host_vector<uchar> & words)
 {
-	cur_char_index = 0;
-	cur_word_index = 0;
-	for (; cur_word_index < RANDSTRCOUNT; cur_word_index++)
-	{
-		if (cur_char_index > chars_count - RANDSTRMAXLEN - 1)
-			break;
-
-		h_positions[cur_word_index] = cur_char_index;
-		const int strlen = rand() % RANDSTRMAXLEN + 1;
-		for (int j = 0; j < strlen; j++)
-			h_chars[cur_char_index++] = RANDCHARSET[rand() % RANDCHARSCOUNT];
-
-		h_chars[cur_char_index++] = BREAKCHAR;
-	}
-}
-
-bool test_random_strings()
-{
-	const auto h_positions = static_cast<int*>(malloc(RANDSTRCOUNT * sizeof(int)));
-	const int chars_count = RANDSTRCOUNT * RANDSTRMAXLEN / 2;
-	const auto h_chars = static_cast<unsigned char*>(malloc(chars_count * sizeof(char)));
-	int cur_char_index;
-	int cur_word_index;
-	generate_random_strings(h_positions, h_chars, cur_char_index, cur_word_index, chars_count);
-
-	unsigned char* d_word_array;
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_word_array), cur_char_index + CHARSTOHASH));
-	checkCudaErrors(cudaMemcpy(d_word_array, h_chars, cur_char_index, cudaMemcpyHostToDevice));
-	int* d_word_positions;
-	checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&d_word_positions), sizeof(int)*(cur_word_index + 1)));
-	checkCudaErrors(cudaMemcpy(d_word_positions, h_positions, sizeof(int)*cur_word_index, cudaMemcpyHostToDevice));
-
-	const auto d_sorted_positions = get_sorted_positions(d_word_positions, cur_word_index, d_word_array);
-	const bool sorting_result = test_string_sorting(d_sorted_positions, cur_word_index, h_chars, cur_char_index);
-
-	const auto output = create_output(d_word_array, d_sorted_positions, cur_word_index);
-	const bool output_result = test_output(h_chars, cur_char_index, output);
-
-	free(h_positions);
-	free(h_chars);
-
-	checkCudaErrors(cudaFree(d_word_array));
-	checkCudaErrors(cudaFree(d_word_positions));
-
-	return output_result && sorting_result;
-}
-
-bool test_string_sorting(int * d_sorted_positions, const int word_count, unsigned char * h_word_array, const size_t word_array_size)
-{
-	auto words_cpu = get_sorted_cpu_words(h_word_array, word_array_size);
-	auto words_gpu = get_sorted_gpu_words(d_sorted_positions, word_count, h_word_array, word_array_size);
-
-	for (auto& i : words_gpu)
-		std::transform(i.begin(), i.end(), i.begin(), ::tolower);
+	auto words_gpu = get_sorted_gpu_words(sorted_positions, words);
+	auto words_cpu = get_sorted_unique_cpu_words(words);
 
 	for (uint i = 0; i < words_gpu.size(); i++)
 	{
@@ -136,78 +89,265 @@ bool test_string_sorting(int * d_sorted_positions, const int word_count, unsigne
 	return true;
 }
 
-bool test_output(unsigned char* h_word_array, const int chars_input_count, const sorting_output output)
+ullong cpu_hash(std::string s)
 {
-	auto words_split = get_sorted_cpu_words(h_word_array, chars_input_count);
+	int i = 0;
+	ullong hash = 0;
+	for (; i < CHARSTOHASH; i++)
+	{
+		const unsigned char c = s[i];
+		if (c == '\0')
+			break;
 
-	vector<ullong> hashes(words_split.size());
-	std::transform(words_split.begin(), words_split.end(), hashes.begin(), cpu_hash);
+		hash *= ALPHABETSIZE;
+		hash += c & CHARMASK;
+	}
 
-	vector<char> chars(output.suffixes_size);
-	int cur_char_position = 0;
-	vector<int> positions{};
+	const ullong mask = s[i] == '\0' ? 0 : 1;
+
+	for (; i < CHARSTOHASH; i++)
+		hash *= ALPHABETSIZE;
+
+	hash <<= 1;
+	hash |= mask;
+	return hash;
+}
+
+sorting_output_cpu get_cpu_output(const thrust::host_vector<uchar> & words)
+{
+	sorting_output_cpu output;
+
+	auto words_split = get_sorted_unique_cpu_words(words);
+
+	output.hashes.resize(words_split.size());
+	std::transform(words_split.begin(), words_split.end(), output.hashes.begin(), cpu_hash);
+
 	for (uint i = 0; i < words_split.size(); i++)
 	{
 		auto sts = words_split[i];
-		if (i == 0 || hashes[i] != hashes[i - 1])
-			positions.push_back(cur_char_position);
+		if (i == 0 || output.hashes[i] != output.hashes[i - 1])
+			output.positions.push_back(static_cast<int>(output.suffixes.size()));
 
 		if (sts.size() >= CHARSTOHASH)
 		{
 			for (uint j = CHARSTOHASH; j < sts.size(); j++)
-				chars[cur_char_position++] = sts[j];
-			chars[cur_char_position++] = 0;
+				output.suffixes.push_back(sts[j]);
+			output.suffixes.push_back(BREAKCHAR);
 		}
 	}
 
-	bool fail = false;
-	auto d_hash = create_vector(output.hashes, output.hashes_count);
-	const auto ita = std::unique(hashes.begin(), hashes.end());
-	hashes.resize(std::distance(hashes.begin(), ita));
-	if (hashes.size() != static_cast<ullong>(output.hashes_count))
+	const auto hashes_end = std::unique(output.hashes.begin(), output.hashes.end());
+	output.hashes.resize(std::distance(output.hashes.begin(), hashes_end));
+
+	return output;
+}
+
+bool test_output(const thrust::host_vector<uchar> & words, const sorting_output_gpu& gpu_output)
+{
+	const auto cpu_output = get_cpu_output(words);
+
+	if (cpu_output.hashes.size() != gpu_output.hashes.size())
 	{
 		cout << "Bad hashes count" << endl;
-		fail = true;
+		return false;
 	}
 
-	for (uint i = 0; i < d_hash.size(); i++)
-		if (d_hash[i] != hashes[i])
+	thrust::host_vector<ullong> gpu_hashes(gpu_output.hashes);
+	for (size_t i = 0; i < gpu_hashes.size(); i++)
+		if (gpu_hashes[i] != cpu_output.hashes[i])
 		{
 			cout << "Bad hash" << endl;
-			fail = true;
-			break;
+			return false;
 		}
 
-	vector<int> lens(words_split.size());
-	std::transform(words_split.begin(), words_split.end(), lens.begin(), postfix_len_from_str);
-
-	const auto lenchars = std::accumulate(lens.begin(), lens.end(), 0);
-	if (output.suffixes_size != lenchars)
+	if (gpu_output.suffixes.size() != cpu_output.suffixes.size())
 	{
 		cout << "Bad suffix size" << endl;
-		fail = true;
+		return false;
 	}
 
-	auto za = create_vector(output.suffixes, output.suffixes_size);
-
-	std::transform(za.begin(), za.end(), za.begin(), ::tolower);
-
-	for (int i = 0; i < lenchars; i++)
-		if (chars[i] != za[i])
+	thrust::host_vector<uchar> gpu_suffixes(gpu_output.suffixes);
+	for (size_t i = 0; i < gpu_suffixes.size(); i++)
+	{
+		if (gpu_suffixes[i] != cpu_output.suffixes[i])
 		{
 			cout << "Bad char" << endl;
-			fail = true;
-			break;
+			return false;
 		}
+	}
 
-	auto vaa = create_vector(output.positions, output.hashes_count);
-	for (int i = 0; i < output.hashes_count; i++)
-		if (vaa[i] != positions[i])
+	thrust::host_vector<int> gpu_positions(gpu_output.positions);
+	for (size_t i = 0; i < gpu_positions.size(); i++)
+		if (gpu_positions[i] != cpu_output.positions[i])
 		{
 			cout << "Bad position" << endl;
-			fail = true;
-			break;
+			return false;
 		}
 
-	return !fail;
+	return true;
+}
+
+bool test_book(const char* filename)
+{
+	thrust::host_vector<int> positions;
+	thrust::host_vector<uchar> words_chars;
+
+	read_file(filename, positions, words_chars);
+
+	const thrust::device_vector<uchar> words_device(words_chars);
+	thrust::device_vector<int> positions_device(positions);
+
+	const auto sorted_positions = get_sorted_positions(positions_device, words_device);
+	const bool sorting_result = test_string_sorting(sorted_positions, words_chars);
+
+	const auto output = create_output(words_device, sorted_positions);
+	const bool output_result = test_output(words_chars, output);
+
+	if (!output_result || !sorting_result)
+	{
+		cout << "Fail testing book " << filename << endl;
+		return false;
+	}
+
+	cout << "Win" << endl;
+
+	return true;
+}
+
+void generate_random_strings(thrust::host_vector<uchar>& words, thrust::host_vector<int>& positions)
+{
+	const int chars_count = (RANDSTRCOUNT + 1) * (RANDSTRMAXLEN * 11 / 10) / 2;
+	int words_index = 0;
+	words.resize(chars_count);
+	positions.resize(RANDSTRCOUNT);
+	for (int i = 0; i < RANDSTRCOUNT; i++)
+	{
+		positions[i] = words_index;
+		const int strlen = rand() % RANDSTRMAXLEN + 1;
+		for (int j = 0; j < strlen; j++)
+			words[words_index++] = RANDCHARSET[rand() % RANDCHARSCOUNT];
+
+		words[words_index++] = BREAKCHAR;
+	}
+
+	words.resize(words_index);
+}
+
+bool test_random_strings()
+{
+	thrust::host_vector<uchar> words;
+	thrust::host_vector<int> positions;
+	generate_random_strings(words, positions);
+
+	const thrust::device_vector<uchar> words_device(words);
+	thrust::device_vector<int> positions_device(positions);
+
+	thrust::device_vector<int> sorted_positions;
+	MEASURETIME(get_sorted_positions(positions_device, words_device, sorted_positions), "Sorting random strings");
+	const bool sorting_result = test_string_sorting(sorted_positions, words);
+
+	const auto output = create_output(words_device, sorted_positions);
+	const bool output_result = test_output(words, output);
+
+	return output_result && sorting_result;
+}
+
+using namespace thrust;
+void get_gpu_result(const host_vector<int>& positions_dictionary, const host_vector<uchar>& words_dictionary,
+	const host_vector<int>& positions_book_host, const host_vector<uchar>& words_book, device_vector<bool>& result)
+{
+	device_vector<int> positions_book;
+	device_vector<unsigned char> words;
+	device_vector<int> sorted_positions;
+
+	prepare_for_search(positions_dictionary, words_dictionary, positions_book_host, words_book,
+		positions_book, words, sorted_positions);
+
+	std::cout << measure<>::execution(find_if_strings_exist, positions_book, sorted_positions, words, result) << "gpu milliseconds taken finding result" << std::endl;
+}
+
+void fill_result_vec(vector<bool>& result, const std::vector<std::string>& strings_book, const unordered_set<string>& dictionary)
+{
+	result.resize(strings_book.size());
+
+	const auto end = dictionary.end();
+	for (size_t i = 0; i < result.size(); i++)
+	{
+		const auto val = dictionary.find(strings_book[i]);
+		result[i] = val != end;
+	}
+}
+
+void get_cpu_result(const host_vector<uchar>& words_dictionary, const host_vector<uchar>& words_book,
+	const host_vector<int>& positions_book, vector<bool>& result)
+{
+	auto strings_dictionary = get_sorted_unique_cpu_words(words_dictionary);
+	vector<string> strings_book(positions_book.size());
+	vector<uchar> chars;
+
+	for (size_t i = 0; i < strings_book.size(); i++)
+	{
+		const auto position = positions_book[i];
+		int index_in_word = 0;
+		while (true)
+		{
+			const auto c = words_book[position + index_in_word];
+			if (c != BREAKCHAR)
+			{
+				chars.push_back(c);
+				index_in_word++;
+			}
+			else
+			{
+				strings_book[i] = string(chars.begin(), chars.end());
+				chars.clear();
+				break;
+			}
+		}
+	}
+
+	const unordered_set<string> dictionary(strings_dictionary.begin(), strings_dictionary.end());
+
+	std::cout << measure<>::execution(fill_result_vec, result, strings_book, dictionary) << "cpu milliseconds taken finding result" << std::endl;
+}
+
+bool test_array_searching_book(const char* dictionary_filename, const char* book_filename)
+{
+	host_vector<int> positions_dictionary_host;
+	host_vector<uchar> words_dictionary_host;
+	read_file(dictionary_filename, positions_dictionary_host, words_dictionary_host);
+
+	host_vector<int> positions_book_host;
+	host_vector<uchar> words_book_host;
+	read_file(book_filename, positions_book_host, words_book_host);
+
+	device_vector<bool> gpu_result;
+	vector<bool> cpu_result;
+
+	std::cout << measure<>::execution(get_gpu_result, positions_dictionary_host, words_dictionary_host,
+		positions_book_host, words_book_host, gpu_result) <<
+		"gpu milliseconds total taken finding result" << std::endl;
+	std::cout << measure<>::execution(get_cpu_result, words_dictionary_host, words_book_host, positions_book_host, cpu_result) <<
+		"cpu milliseconds total taken finding result" << std::endl;
+
+	if (gpu_result.size() != cpu_result.size())
+	{
+		cout << "fail searching result";
+		return false;
+	}
+	auto strings_book = get_sorted_cpu_words(words_book_host);
+
+	auto vec_result = from_vector_dev(gpu_result);
+	for (size_t i = 0; i < cpu_result.size(); i++)
+	{
+		if (cpu_result[i] != vec_result[i])
+		{
+			auto s = strings_book[i];
+			cout << "fail searching result";
+			return false;
+		}
+	}
+
+	cout << "array searching win" << endl;
+	return true;
 }

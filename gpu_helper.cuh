@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
+#include "parameters.h"
 
 #if __NVCC__
 #define kernel_init(...) <<<__VA_ARGS__>>>
@@ -23,8 +24,8 @@ const dim3 blockDim;
 const dim3 gridDim;
 #endif
 
-#define GetGlobalId() (threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.y * blockDim.x\
-			         + blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.y * gridDim.x)
+#define GetGlobalId() ((blockIdx.x + blockIdx.y * static_cast<size_t>(gridDim.x) + static_cast<size_t>(gridDim.x) * gridDim.y * blockIdx.z)\
+ * blockDim.x * blockDim.y * blockDim.z + threadIdx.z * blockDim.x * blockDim.y+ threadIdx.y * blockDim.x+ threadIdx.x)
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 
@@ -84,7 +85,9 @@ __host__ __device__ T my_max(T a, T b)
 		checkCudaErrors(cudaEventRecord(start));									\
 	}																				\
 	uint num_threads, num_blocks;													\
-	compute_grid_size(threadCount, BLOCKSIZE, num_blocks, num_threads);				\
+	num_threads = BLOCKSIZE < threadCount ? BLOCKSIZE : threadCount;				\
+	num_blocks = (threadCount % num_threads != 0) ?									\
+		(threadCount / num_threads + 1) : (threadCount / num_threads);				\
 	function kernel_init(num_blocks, num_threads) (__VA_ARGS__);					\
 	getLastCudaError(name " failed.");												\
 	if (WRITETIME)																	\

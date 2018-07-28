@@ -1,36 +1,109 @@
 #pragma once
 
-#include <thrust/device_ptr.h>
+#include <parameters.h>
 
-void sort_keys_and_positions(int* d_positions, thrust::device_ptr<unsigned long long> keys, int current_count);
+template<class T, T N>
+struct equal_to_val : thrust::unary_function<T, T>
+{
+	__host__ __device__ T operator()(const T x) const { return x == N; }
+};
 
-void mark_singletons(int* d_positions, thrust::device_ptr<unsigned long long> keys,
-	thrust::device_ptr<int> destinations, thrust::device_ptr<int> helper,
-	thrust::device_ptr<int> output, int current_count);
+struct less_than_string : thrust::binary_function<int, int, bool>
+{
+	const uchar * words;
+	explicit less_than_string(const uchar* words) : words(words) {	}
 
-void get_segments(thrust::device_ptr<int> helper, int current_count);
+	__host__ __device__ bool operator()(const int x, const int y) const
+	{
+		//return x < y;
+		int i = 0;
+		uchar c1;
+		uchar c2;
+		while (true)
+		{
+			c1 = words[x + i];
+			c2 = words[y + i];
+			if (c1 < c2)
+				return true;
+			if (c2 < c1)
+				return false;
+			if (c1 == 0)
+				return false;
+			++i;
+		}
+	}
+};
 
-void create_hashes_with_seg(int* d_positions, unsigned char* d_chars, thrust::device_ptr<unsigned long long> keys,
-	thrust::device_ptr<int> helper, int offset, int segment_size, int current_count,
-	int seg_chars);
+__device__ __host__ __inline__ ullong get_hash(const uchar* words, const int chars_to_hash, const int my_position)
+{
+	uchar last_bit = 1;
+	uchar char_mask = CHARMASK;
 
-void remove_handled_update_count(thrust::device_ptr<int> positions, thrust::device_ptr<ullong> keys,
-	thrust::device_ptr<int> destinations, thrust::device_ptr<int> helper, int& current_count);
+	ullong hash = 0;
 
-void create_consecutive_numbers(int word_count, thrust::device_ptr<int> destinations);
+	for (int i = 0; i < chars_to_hash; i++)
+	{
+		const unsigned char c = words[i + my_position];
+		if (c == BREAKCHAR)
+		{
+			char_mask = 0;
+			last_bit = 0;
+		}
+		hash *= ALPHABETSIZE;
+		hash += c & char_mask;
+	}
+	if (words[chars_to_hash + my_position] == BREAKCHAR)
+		last_bit = 0;
 
-void flags_different_than_last(ullong* d_keys, int* d_flags, int current_count);
+	return hash << 1 | last_bit;
+}
 
-thrust::device_ptr<int> remove_duplicates(int* d_sorted_positions, int word_count, thrust::device_ptr<int> sorted_positions);
+struct hash_functor : thrust::unary_function<int, ullong>
+{
+	uchar* words;
 
-void create_hashes(uchar* d_word_array, thrust::device_ptr<int> sorted_positions, thrust::device_ptr<int> positions_end,
-	thrust::device_ptr<ullong> hashes);
+	explicit hash_functor(uchar* words) : words(words) {	}
 
-void get_suffix_positions(unsigned char* d_word_array, thrust::device_ptr<int> sorted_positions,
-	thrust::device_ptr<int> positions_end, thrust::device_ptr<int> suffix_positions);
+	__host__ __device__ ullong operator()(const int position) const
+	{
+		if (position == -1)
+			return 0ULL;
 
-void copy_suffixes(unsigned char* d_word_array, int* d_sorted_positions, int word_count,
-	thrust::device_ptr<int> suffix_positions, thrust::device_ptr<unsigned char> suffixes);
+		return get_hash(words, CHARSTOHASH, position);
+	}
+};
 
-thrust::device_ptr<unsigned long long> get_unique_hashes(int word_count, thrust::device_ptr<int> suffix_positions,
-	thrust::device_ptr<unsigned long long> hashes);
+struct compute_postfix_length_functor : thrust::unary_function<int, int>
+{
+	uchar* words;
+
+	explicit compute_postfix_length_functor(uchar* words) : words(words) {}
+
+	__device__  int operator()(int my_position) const
+	{
+		if (my_position == -1)
+			return 0;
+
+		int length = 0;
+		uchar c;
+		for (int i = 1; i < CHARSTOHASH; i++)
+		{
+			c = words[my_position + i];
+			if (c == BREAKCHAR)
+				return 0;
+		}
+
+		my_position = my_position + CHARSTOHASH;
+		while (true)
+		{
+			c = words[my_position];
+
+			if (c == BREAKCHAR)
+				break;
+			my_position++;
+			length++;
+		}
+
+		return length + 1;
+	}
+};

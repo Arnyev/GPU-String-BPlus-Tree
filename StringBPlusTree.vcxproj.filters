@@ -2,14 +2,13 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <CudaCompile Include="bplus_tree_gpu.cu" />
-    <CudaCompile Include="sort_strings_thrust.cu" />
-    <CudaCompile Include="sort_strings_kernels.cu" />
+    <CudaCompile Include="sort_strings.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="tests.cpp" />
-    <ClCompile Include="sort_strings.cpp" />
+    <ClCompile Include="file_reading.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bplus_tree.h" />
@@ -17,10 +16,8 @@
     <ClInclude Include="bplus_tree_gpu.cuh" />
     <ClInclude Include="gpu_helper.cuh" />
     <ClInclude Include="not_implemented.h" />
-    <ClInclude Include="parameters.h" />
-    <ClInclude Include="helpers.h" />
     <ClInclude Include="functions.h" />
     <ClInclude Include="sort_strings.cuh" />
-    <ClInclude Include="sort_helpers.cuh" />
+    <ClInclude Include="parameters.h" />
   </ItemGroup>
 </Project>
