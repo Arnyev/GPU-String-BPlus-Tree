@@ -12,13 +12,17 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="insertion.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="main.cu" />
     <ClCompile Include="tree_construction_cpu.cpp" />
     <ClCompile Include="tree_construction_gpu.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="prog.cu" />
     <CudaCompile Include="templates_init.cu" />
     <CudaCompile Include="tree_construction_gpu.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="search_words.cuh" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{9C36FAF7-32DE-4FD9-B366-109F4C880113}</ProjectGuid>
@@ -66,6 +70,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);C:\Libs\boost_1_67_0\;</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -89,6 +94,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);C:\Libs\boost_1_67_0\;</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

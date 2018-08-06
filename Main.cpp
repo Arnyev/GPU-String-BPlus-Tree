@@ -137,6 +137,10 @@ int main(int argc, char **argv)
 	}
 	bplus_tree_cpu<hash, 4> tree(hashes.data(), indexes.data(), hashes.size(), suffixes.data(), suffixes.size());
 	tree.exist_word("axxxxxxxxxxxxjanex");
+	bplus_tree_gpu<hash, 4> gtree(hashes.data(), indexes.data(), hashes.size(), suffixes.data(), suffixes.size());
+	char *toFind = "domek\0romek";
+	int tab[2] = { 0, 6 };
+	gtree.exist_word(toFind, 12, tab, 2);
 	//Sample creation of B+ tree
 	//int i = 0;
 	//int size = 64;
