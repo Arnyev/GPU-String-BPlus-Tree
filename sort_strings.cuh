@@ -15,14 +15,11 @@ struct less_than_string : thrust::binary_function<int, int, bool>
 
 	__host__ __device__ bool operator()(const int x, const int y) const
 	{
-		//return x < y;
 		int i = 0;
-		uchar c1;
-		uchar c2;
 		while (true)
 		{
-			c1 = words[x + i];
-			c2 = words[y + i];
+			const auto c1 = words[x + i];
+			const auto c2 = words[y + i];
 			if (c1 < c2)
 				return true;
 			if (c2 < c1)
@@ -60,24 +57,21 @@ __device__ __host__ __inline__ ullong get_hash(const uchar* words, const int cha
 
 struct hash_functor : thrust::unary_function<int, ullong>
 {
-	uchar* words;
+	const uchar* words;
 
-	explicit hash_functor(uchar* words) : words(words) {	}
+	explicit hash_functor(const uchar* words) : words(words) {	}
 
 	__host__ __device__ ullong operator()(const int position) const
 	{
-		if (position == -1)
-			return 0ULL;
-
 		return get_hash(words, CHARSTOHASH, position);
 	}
 };
 
 struct compute_postfix_length_functor : thrust::unary_function<int, int>
 {
-	uchar* words;
+	const uchar* words;
 
-	explicit compute_postfix_length_functor(uchar* words) : words(words) {}
+	explicit compute_postfix_length_functor(const uchar* words) : words(words) {}
 
 	__device__  int operator()(int my_position) const
 	{

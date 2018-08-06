@@ -3,9 +3,9 @@
 #include "parameters.h"
 
 void read_file(const char* filepath, thrust::host_vector<int>& positions, thrust::host_vector<uchar>& words);
-sorting_output_gpu create_output(thrust::device_vector<uchar> words, thrust::device_vector<int> sorted_positions);
-thrust::device_vector<int> get_sorted_positions(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars);
-void get_sorted_positions(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars, thrust::device_vector<int>& sorted);
+void create_output(const thrust::device_vector<uchar>& words, thrust::device_vector<int>& sorted_positions, sorting_output_gpu& output);
+void get_sorted_positions(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars, thrust::device_vector<int>& output);
+void sort_positions_thrust(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars);
 bool test_random_strings();
 bool test_array_searching_book(const char* dictionary_filename, const char* book_filename);
 bool test_book(const char* filename);

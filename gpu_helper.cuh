@@ -100,3 +100,22 @@ __host__ __device__ T my_max(T a, T b)
 		checkCudaErrors(cudaEventDestroy(stop));									\
 	}																				\
 }
+
+#define STARTKERNEL(function,name,thread_count,...)														\
+{																										\
+	const auto threads_x = static_cast<unsigned>(BLOCKSIZE < thread_count ? BLOCKSIZE : thread_count);	\
+	auto num_blocks = thread_count % threads_x != 0														\
+		? thread_count / threads_x + 1																	\
+		: thread_count / threads_x;																		\
+																										\
+	const auto grid_x = static_cast<unsigned>(GRIDDIM < num_blocks ? GRIDDIM : num_blocks);				\
+	num_blocks = num_blocks / GRIDDIM == 0 ? 1 : num_blocks / GRIDDIM;									\
+	const auto grid_y = static_cast<unsigned>(GRIDDIM < num_blocks ? GRIDDIM : num_blocks);				\
+	num_blocks = num_blocks / GRIDDIM == 0 ? 1 : num_blocks / GRIDDIM;									\
+	const auto grid_z = static_cast<unsigned>(num_blocks);												\
+																										\
+	const dim3 threads(threads_x, 1, 1);																\
+	const dim3 blocks(grid_x, grid_y, grid_z);															\
+	function kernel_init(num_blocks, num_threads) (__VA_ARGS__);										\
+	getLastCudaError(name " failed.");																	\
+}

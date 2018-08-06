@@ -1,10 +1,7 @@
 #include <algorithm>
-#include "functions.h"
 #include <string>
-#include <helper_cuda.h>
-#include "parameters.h"
-#include "gpu_helper.cuh"
 #include <unordered_set>
+#include "functions.h"
 
 using namespace std;
 
@@ -197,10 +194,13 @@ bool test_book(const char* filename)
 	const thrust::device_vector<uchar> words_device(words_chars);
 	thrust::device_vector<int> positions_device(positions);
 
-	const auto sorted_positions = get_sorted_positions(positions_device, words_device);
+	thrust::device_vector<int> sorted_positions;
+
+	get_sorted_positions(positions_device, words_device, sorted_positions);
 	const bool sorting_result = test_string_sorting(sorted_positions, words_chars);
 
-	const auto output = create_output(words_device, sorted_positions);
+	sorting_output_gpu output;
+	create_output(words_device, sorted_positions, output);
 	const bool output_result = test_output(words_chars, output);
 
 	if (!output_result || !sorting_result)
@@ -216,19 +216,24 @@ bool test_book(const char* filename)
 
 void generate_random_strings(thrust::host_vector<uchar>& words, thrust::host_vector<int>& positions)
 {
-	const int chars_count = (RANDSTRCOUNT + 1) * (RANDSTRMAXLEN * 11 / 10) / 2;
+	const auto avg_len = (RANDSTRMAXLEN + RANDSTRMINLEN) / 2;
+	const auto diff_len = RANDSTRMAXLEN - RANDSTRMINLEN + 1;
+	const size_t chars_count = RANDSTRCOUNT * avg_len * 11 / 10;
 	int words_index = 0;
 	words.resize(chars_count);
 	positions.resize(RANDSTRCOUNT);
-	for (int i = 0; i < RANDSTRCOUNT; i++)
+	for (size_t i = 0; i < RANDSTRCOUNT; i++)
 	{
 		positions[i] = words_index;
-		const int strlen = rand() % RANDSTRMAXLEN + 1;
+		const int strlen = rand() % diff_len + RANDSTRMINLEN;
 		for (int j = 0; j < strlen; j++)
 			words[words_index++] = RANDCHARSET[rand() % RANDCHARSCOUNT];
 
 		words[words_index++] = BREAKCHAR;
 	}
+
+	for (int i = 0; i < RANDSTRMAXLEN; i++)
+		words[words_index++] = BREAKCHAR;
 
 	words.resize(words_index);
 }
@@ -241,12 +246,17 @@ bool test_random_strings()
 
 	const thrust::device_vector<uchar> words_device(words);
 	thrust::device_vector<int> positions_device(positions);
+	thrust::device_vector<int> positions_device2(positions);
 
 	thrust::device_vector<int> sorted_positions;
-	MEASURETIME(get_sorted_positions(positions_device, words_device, sorted_positions), "Sorting random strings");
+	std::cout << measure<>::execution(get_sorted_positions, positions_device, words_device, sorted_positions) << " Sorting random strings" << endl;
+
+	std::cout << measure<>::execution(sort_positions_thrust, positions_device2, words_device) << " Sorting random strings thrust" << endl;
+
 	const bool sorting_result = test_string_sorting(sorted_positions, words);
 
-	const auto output = create_output(words_device, sorted_positions);
+	sorting_output_gpu output;
+	create_output(words_device, sorted_positions, output);
 	const bool output_result = test_output(words, output);
 
 	return output_result && sorting_result;

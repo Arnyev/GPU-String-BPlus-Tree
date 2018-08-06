@@ -49,7 +49,7 @@ void read_file(const char* filepath, thrust::host_vector<int>& positions, thrust
 		{
 			if (currently_on_not_alpha_seq)
 			{
-				positions.push_back(words.size());
+				positions.push_back(static_cast<int>(words.size()));
 				currently_on_not_alpha_seq = false;
 			}
 

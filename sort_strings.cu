@@ -1,4 +1,3 @@
-#include "parameters.h"
 #include "gpu_helper.cuh"
 #include <helper_cuda.h>
 #include <sort_strings.cuh>
@@ -146,9 +145,9 @@ __global__ void compute_postfix_lengths_d(uchar* words, int* positions, const in
 	lengths[thread_num] = length + 1;
 }
 
-__global__ void copy_suffixes_d(const uchar* words, const int* positions, const int word_count, uchar* suffixes, const int* suffix_positions)
+__global__ void copy_suffixes_d(const uchar* words, const int* positions, const size_t word_count, uchar* suffixes, const int* suffix_positions)
 {
-	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
+	const auto thread_num = GetGlobalId();
 	if (thread_num >= word_count)
 		return;
 
@@ -163,11 +162,11 @@ __global__ void copy_suffixes_d(const uchar* words, const int* positions, const 
 		suffixes[suffix_pos + i] = words[position + i];
 }
 
-void copy_suffixes(const device_vector<uchar>& words, const device_vector<int>& sorted_positions, const int word_count,
+void copy_suffixes(const device_vector<uchar>& words, const device_vector<int>& sorted_positions, const size_t word_count,
                    const device_vector<int> suffix_positions, device_vector<uchar>& suffixes)
 {
-	MEASURETIMEKERNEL(copy_suffixes_d, "Copying suffixes", word_count, words.data().get(), sorted_positions.data().get()
-		, word_count, suffixes.data().get(), suffix_positions.data().get());
+	STARTKERNEL(copy_suffixes_d, "Copying suffixes", word_count, words.data().get(), sorted_positions.data().get(),
+		word_count,suffixes.data().get(), suffix_positions.data().get());
 }
 
 void flags_different_than_last(const device_vector<ullong>& keys, device_vector<int>& flags)
@@ -236,12 +235,13 @@ int compute_segment_size(const device_vector<int>& segments)
 	return segment_size;
 }
 
-device_vector<int> get_sorted_positions(device_vector<int>& positions, const device_vector<uchar>& chars)
+void get_sorted_positions(device_vector<int>& positions, const device_vector<uchar>& chars, device_vector<int>& output)
 {
 	device_vector<ullong> keys(positions.size());
 	device_vector<int> destinations(positions.size());
 	device_vector<int> helper(positions.size());
-	device_vector<int> output(positions.size());
+	output.reserve(positions.size() + 1);
+	output.resize(positions.size());
 
 	sequence(destinations.begin(), destinations.end());
 
@@ -268,19 +268,15 @@ device_vector<int> get_sorted_positions(device_vector<int>& positions, const dev
 		inclusive_scan(helper.begin(), helper.end(), helper.begin());
 		segment_size = compute_segment_size(helper);
 	}
-
-	return output;
 }
 
-void get_sorted_positions(device_vector<int>& positions, const device_vector<uchar>& chars, device_vector<int>& output)
+void sort_positions_thrust(device_vector<int>& positions, const device_vector<uchar>& chars)
 {
-	output = get_sorted_positions(positions, chars);
+	sort(positions.begin(), positions.end(), less_than_string(chars.data().get()));
 }
 
-sorting_output_gpu create_output(device_vector<uchar> words, device_vector<int> sorted_positions)
+void create_output(const device_vector<uchar>& words, device_vector<int>& sorted_positions, sorting_output_gpu& result)
 {
-	sorting_output_gpu result;
-
 	const auto positions_end = remove_if(sorted_positions.begin(), sorted_positions.end(), equal_to_val<int, -1>());
 
 	const auto word_count = static_cast<int>(positions_end - sorted_positions.begin());
@@ -298,16 +294,12 @@ sorting_output_gpu create_output(device_vector<uchar> words, device_vector<int> 
 	copy_suffixes(words, sorted_positions, word_count, result.positions, result.suffixes);
 
 	result.hashes.resize(word_count);
-
-	transform(sorted_positions.begin(), positions_end, result.hashes.begin(), hash_functor(words.data().get()));
+	transform(sorted_positions.begin(), sorted_positions.begin()+word_count, result.hashes.begin(), hash_functor(words.data().get()));
 
 	const auto hashes_end = unique_by_key(result.hashes.begin(), result.hashes.end(), result.positions.begin());
-
 	const auto hashes_count = hashes_end.first - result.hashes.begin();
 	result.hashes.resize(hashes_count);
 	result.positions.resize(hashes_count);
-
-	return result;
 }
 
 void find_if_strings_exist(const device_vector<int>& values_positions, const device_vector<int>& input_positions,
@@ -331,10 +323,10 @@ void prepare_for_search(const host_vector<int>& positions_dictionary_host, const
 	transform(positions_book.begin(), positions_book.end(), positions_book.begin(), _1 + words_dictionary_host.size());
 
 	words = device_vector<uchar>(words_dictionary_host.size() + words_book_host.size() + CHARSTOHASH);
-	thrust::copy(words_dictionary_host.begin(), words_dictionary_host.end(), words.begin());
-	thrust::copy(words_book_host.begin(), words_book_host.end(), words.begin() + words_dictionary_host.size());
+	copy(words_dictionary_host.begin(), words_dictionary_host.end(), words.begin());
+	copy(words_book_host.begin(), words_book_host.end(), words.begin() + words_dictionary_host.size());
 
-	sorted_positions = get_sorted_positions(positions_dictionary, words);
+	get_sorted_positions(positions_dictionary, words, sorted_positions);
 	const auto new_end = remove_if(sorted_positions.begin(), sorted_positions.begin() + sorted_positions.size(), equal_to_val<int, -1>());
 
 	const auto dict_count = new_end - sorted_positions.begin();

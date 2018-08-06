@@ -15,13 +15,15 @@ void __syncthreads();
 #define BREAKCHAR '\0'
 #define SPLITTER ' '
 #define FILEPATH "book.txt"
-#define RANDSTRMAXLEN 128
-#define RANDSTRCOUNT 100000
-#define RANDCHARSET "ab"
+#define RANDSTRMINLEN 1
+#define RANDSTRMAXLEN 100
+#define RANDSTRCOUNT 10000ULL
+#define RANDCHARSET "a"
 #define RANDCHARSCOUNT (sizeof(RANDCHARSET)-1)
 #define CHARSTOHASH 13
 #define ALPHABETSIZE 27
 #define BLOCKSIZE 256
+#define GRIDDIM 2048
 #define KEYBITS 64
 #define CHARBITS 5
 #define CHARMASK ~static_cast<uchar>(3 << 5);
