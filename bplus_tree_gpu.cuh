@@ -430,7 +430,7 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wor
 	gpuErrchk(cudaMemcpy(d_indexes, beginIndexes, indexesSize * sizeof(int), cudaMemcpyHostToDevice));
 
 	const int blocksNum = elementNum <= 32 ? 1 : 2;
-	const int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 1024);
+	const int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 512);
 	kernel_find_words<HASH, B> kernel_init(blocksNum, threadsNum) (threadsNum, keysArray, indexesArray, sizeArray,
 	                                                               rootNodeIndex, height, suffixes, suffixesSize,
 	                                                               elementNum, d_words, d_indexes, d_output);
