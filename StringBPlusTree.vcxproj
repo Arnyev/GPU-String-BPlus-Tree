@@ -108,6 +108,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <FileType>CppHeader</FileType>
     </ClCompile>
     <ClInclude Include="parameters.h" />
+    <ClInclude Include="sort_helpers.cuh" />
     <ClInclude Include="sort_strings.cuh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

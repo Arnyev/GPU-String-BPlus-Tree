@@ -3,6 +3,7 @@
 #include <vector>
 #include <thrust/device_vector.h>
 #include <chrono>
+#include <helper_cuda.h>
 
 typedef unsigned char uchar;
 typedef unsigned long long ullong;
@@ -17,8 +18,8 @@ void __syncthreads();
 #define FILEPATH "book.txt"
 #define RANDSTRMINLEN 1
 #define RANDSTRMAXLEN 100
-#define RANDSTRCOUNT 10000ULL
-#define RANDCHARSET "a"
+#define RANDSTRCOUNT 1000000ULL
+#define RANDCHARSET "abcdef"
 #define RANDCHARSCOUNT (sizeof(RANDCHARSET)-1)
 #define CHARSTOHASH 13
 #define ALPHABETSIZE 27
@@ -27,7 +28,7 @@ void __syncthreads();
 #define KEYBITS 64
 #define CHARBITS 5
 #define CHARMASK ~static_cast<uchar>(3 << 5);
-#define WRITETIME 0
+#define WRITETIME 1
 #define TOLOWERMASK (1<<5)
 
 struct sorting_output_gpu
@@ -44,17 +45,43 @@ struct sorting_output_cpu
 	std::vector<uchar> suffixes;
 };
 
-template<typename TimeT = std::chrono::milliseconds>
 struct measure
 {
 	template<typename F, typename ...Args>
-	static typename TimeT::rep execution(F&& func, Args&&... args)
+	static std::chrono::microseconds::rep execution(F&& func, Args&&... args)
 	{
-		const auto start = std::chrono::steady_clock::now();
+		const auto start = std::chrono::high_resolution_clock::now();
 		std::forward<decltype(func)>(func)(std::forward<Args>(args)...);
-		auto duration = std::chrono::duration_cast< TimeT>
-			(std::chrono::steady_clock::now() - start);
+		auto duration = std::chrono::duration_cast<std::chrono::microseconds>
+			(std::chrono::high_resolution_clock::now() - start);
 		return duration.count();
+	}
+
+	template<typename F, typename ...Args>
+	static float execution_gpu(F&& func, Args&&... args)
+	{
+		cudaEvent_t start;
+		cudaEvent_t stop;
+		float milliseconds = 0;
+
+		if (WRITETIME)
+		{
+			checkCudaErrors(cudaEventCreate(&start));
+			checkCudaErrors(cudaEventCreate(&stop));
+			checkCudaErrors(cudaDeviceSynchronize());
+			checkCudaErrors(cudaEventRecord(start));
+		}
+		std::forward<decltype(func)>(func)(std::forward<Args>(args)...);
+
+		if (WRITETIME)
+		{
+			checkCudaErrors(cudaEventRecord(stop));
+			checkCudaErrors(cudaEventSynchronize(stop));
+			checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));
+			checkCudaErrors(cudaEventDestroy(start));
+			checkCudaErrors(cudaEventDestroy(stop));
+		}
+		return milliseconds * 1000;
 	}
 };
 

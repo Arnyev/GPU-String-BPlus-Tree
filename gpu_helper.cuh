@@ -6,7 +6,7 @@
 #include <cassert>
 #include "parameters.h"
 
-#if __NVCC__
+#if __CUDACC__
 #define kernel_init(...) <<<__VA_ARGS__>>>
 #define only_gpu_assert()
 
@@ -48,74 +48,30 @@ __host__ __device__ T my_max(T a, T b)
 	return (a > b ? a : b);
 }
 
-#define MEASURETIME(function, name)													\
-{																					\
-	cudaEvent_t start;																\
-	cudaEvent_t stop;																\
-	float milliseconds = 0;															\
-	if (WRITETIME)																	\
-	{																				\
-		checkCudaErrors(cudaEventCreate(&start));									\
-		checkCudaErrors(cudaEventCreate(&stop));									\
-		checkCudaErrors(cudaDeviceSynchronize());									\
-		checkCudaErrors(cudaEventRecord(start));									\
-	}																				\
-    (function);																		\
-	if (WRITETIME)																	\
-	{																				\
-		checkCudaErrors(cudaEventRecord(stop));										\
-		checkCudaErrors(cudaEventSynchronize(stop));								\
-		checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));			\
-		std::cout << name << " took " << milliseconds << " ms" << std::endl;		\
-		checkCudaErrors(cudaEventDestroy(start));									\
-		checkCudaErrors(cudaEventDestroy(stop));									\
-	}																				\
-}
+inline void get_grid_data(const size_t word_count, unsigned& threads_x, unsigned& grid_x, unsigned& grid_y, unsigned& grid_z)
+{
+	threads_x = static_cast<unsigned>(BLOCKSIZE < word_count ? BLOCKSIZE : word_count);
 
-#define MEASURETIMEKERNEL(function,name,threadCount,...)							\
-{																					\
-	cudaEvent_t start;																\
-	cudaEvent_t stop;																\
-	float milliseconds = 0;															\
-	if (WRITETIME)																	\
-	{																				\
-		checkCudaErrors(cudaEventCreate(&start));									\
-		checkCudaErrors(cudaEventCreate(&stop));									\
-		checkCudaErrors(cudaDeviceSynchronize());									\
-		checkCudaErrors(cudaEventRecord(start));									\
-	}																				\
-	uint num_threads, num_blocks;													\
-	num_threads = BLOCKSIZE < threadCount ? BLOCKSIZE : threadCount;				\
-	num_blocks = (threadCount % num_threads != 0) ?									\
-		(threadCount / num_threads + 1) : (threadCount / num_threads);				\
-	function kernel_init(num_blocks, num_threads) (__VA_ARGS__);					\
-	getLastCudaError(name " failed.");												\
-	if (WRITETIME)																	\
-	{																				\
-		checkCudaErrors(cudaEventRecord(stop));										\
-		checkCudaErrors(cudaEventSynchronize(stop));								\
-		checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));			\
-		std::cout << name << " took " << milliseconds << " ms" << std::endl;		\
-		checkCudaErrors(cudaEventDestroy(start));									\
-		checkCudaErrors(cudaEventDestroy(stop));									\
-	}																				\
+	auto num_blocks = word_count % BLOCKSIZE != 0 ? word_count / BLOCKSIZE + 1 : word_count / BLOCKSIZE;
+
+	grid_x = static_cast<unsigned>(GRIDDIM < num_blocks ? GRIDDIM : num_blocks);
+
+	num_blocks = num_blocks % GRIDDIM != 0 ? num_blocks / GRIDDIM + 1 : num_blocks / GRIDDIM;
+
+	grid_y = static_cast<unsigned>(GRIDDIM < num_blocks ? GRIDDIM : num_blocks);
+
+	num_blocks = num_blocks % GRIDDIM != 0 ? num_blocks / GRIDDIM + 1 : num_blocks / GRIDDIM;
+
+	grid_z = static_cast<unsigned>(num_blocks);
 }
 
 #define STARTKERNEL(function,name,thread_count,...)														\
 {																										\
-	const auto threads_x = static_cast<unsigned>(BLOCKSIZE < thread_count ? BLOCKSIZE : thread_count);	\
-	auto num_blocks = thread_count % threads_x != 0														\
-		? thread_count / threads_x + 1																	\
-		: thread_count / threads_x;																		\
-																										\
-	const auto grid_x = static_cast<unsigned>(GRIDDIM < num_blocks ? GRIDDIM : num_blocks);				\
-	num_blocks = num_blocks / GRIDDIM == 0 ? 1 : num_blocks / GRIDDIM;									\
-	const auto grid_y = static_cast<unsigned>(GRIDDIM < num_blocks ? GRIDDIM : num_blocks);				\
-	num_blocks = num_blocks / GRIDDIM == 0 ? 1 : num_blocks / GRIDDIM;									\
-	const auto grid_z = static_cast<unsigned>(num_blocks);												\
+	unsigned threads_x, grid_x, grid_y, grid_z;															\
+	get_grid_data(thread_count, threads_x, grid_x, grid_y, grid_z);										\
 																										\
 	const dim3 threads(threads_x, 1, 1);																\
 	const dim3 blocks(grid_x, grid_y, grid_z);															\
-	function kernel_init(num_blocks, num_threads) (__VA_ARGS__);										\
+	function kernel_init(blocks, threads) (__VA_ARGS__);												\
 	getLastCudaError(name " failed.");																	\
 }

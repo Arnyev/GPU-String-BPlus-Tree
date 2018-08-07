@@ -19,5 +19,6 @@
     <ClInclude Include="functions.h" />
     <ClInclude Include="sort_strings.cuh" />
     <ClInclude Include="parameters.h" />
+    <ClInclude Include="sort_helpers.cuh" />
   </ItemGroup>
 </Project>

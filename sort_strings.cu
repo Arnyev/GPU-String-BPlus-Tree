@@ -32,11 +32,11 @@ __global__ void reposition_strings_d(unsigned char* d_word_array_in, unsigned ch
 
 __global__ void flag_different_than_last_d(const ullong* keys, int* flags, const size_t word_count)
 {
-	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
+	const int thread_num = GetGlobalId();
 	if (thread_num >= word_count)
 		return;
 
-	flags[thread_num] = thread_num == 0 || keys[thread_num] != keys[thread_num - 1] ? 1 : 0;
+	flags[thread_num] = thread_num == 0 || keys[thread_num] != keys[thread_num - 1];
 }
 
 __global__ void create_hashes_with_seg_d(const uchar* words, const int* word_positions, const int* segments, ullong* keys,
@@ -54,7 +54,7 @@ __global__ void create_hashes_with_seg_d(const uchar* words, const int* word_pos
 __global__ void mark_singletons_d(const ullong* keys, int* flags, const int* destinations, int* output,
 	const int* positions, const size_t word_count)
 {
-	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
+	const int thread_num = GetGlobalId();
 	if (thread_num >= word_count)
 		return;
 
@@ -114,7 +114,7 @@ __global__ void mark_singletons_d(const ullong* keys, int* flags, const int* des
 
 __global__ void compute_postfix_lengths_d(uchar* words, int* positions, const int word_count, int* lengths)
 {
-	const int thread_num = threadIdx.x + blockDim.x*blockIdx.x;
+	const int thread_num = GetGlobalId();
 	if (thread_num >= word_count)
 		return;
 
@@ -171,14 +171,14 @@ void copy_suffixes(const device_vector<uchar>& words, const device_vector<int>& 
 
 void flags_different_than_last(const device_vector<ullong>& keys, device_vector<int>& flags)
 {
-	MEASURETIMEKERNEL(flag_different_than_last_d, "Flags different than last", keys.size(), keys.data().get(), flags.
+	STARTKERNEL(flag_different_than_last_d, "Flags different than last", keys.size(), keys.data().get(), flags.
 		data().get(), keys.size());
 }
 
 void create_hashes_with_seg(const device_vector<int>& positions, const device_vector<uchar>& chars,
 	device_vector<ullong>& keys, const device_vector<int>& segments, const int offset, const int segment_size, const int seg_chars)
 {
-	MEASURETIMEKERNEL(create_hashes_with_seg_d, "Create hashes", positions.size(), chars.data().get(), positions.data().
+	STARTKERNEL(create_hashes_with_seg_d, "Create hashes", positions.size(), chars.data().get(), positions.data().
 		get(), segments.data().get(), keys.data().get(), offset, CHARSTOHASH - seg_chars, KEYBITS - segment_size,
 		positions.size());
 }
@@ -186,26 +186,17 @@ void create_hashes_with_seg(const device_vector<int>& positions, const device_ve
 void mark_singletons(const device_vector<int>& positions, const device_vector<ullong>& keys,
 	const device_vector<int>& destinations, device_vector<int>& flags, device_vector<int>& output)
 {
-	MEASURETIMEKERNEL(mark_singletons_d, "Marking singletons", positions.size(), keys.data().get(), flags.data().get(),
+	STARTKERNEL(mark_singletons_d, "Marking singletons", positions.size(), keys.data().get(), flags.data().get(),
 		destinations.data().get(), output.data().get(), positions.data().get(), positions.size());
 }
 
-void sort_keys_and_positions(device_vector<int>& positions, device_vector<ullong>& keys)
-{
-	MEASURETIME(sort_by_key(keys.begin(), keys.end(), positions.begin()), "Sorting ");
-}
-
 void remove_handled(device_vector<int>& positions, device_vector<ullong>& keys, device_vector<int>& destinations,
-                    device_vector<int>& helper)
+	device_vector<int>& helper)
 {
-	const auto iter_start =
-		make_zip_iterator(thrust::make_tuple(keys.begin(), positions.begin(), destinations.begin()));
-	const auto iter_end = make_zip_iterator(thrust::make_tuple(keys.end(), positions.end(), destinations.end()));
+	const auto iter_start = make_zip_iterator(make_tuple(keys.begin(), positions.begin(), destinations.begin()));
+	const auto iter_end = make_zip_iterator(make_tuple(keys.end(), positions.end(), destinations.end()));
 
-	zip_iterator<thrust::tuple<detail::normal_iterator<device_ptr<unsigned long long>>, detail::normal_iterator<
-		                           device_ptr<int>>, detail::normal_iterator<device_ptr<int>>>> new_end;
-
-	MEASURETIME(new_end = remove_if(iter_start, iter_end, helper.begin(), equal_to_val<uchar, 0>()), "Remove handled");
+	const auto new_end = remove_if(iter_start, iter_end, helper.begin(), equal_to_val<uchar, 0>());
 
 	const auto current_count = new_end - iter_start;
 	positions.resize(current_count);
@@ -235,6 +226,11 @@ int compute_segment_size(const device_vector<int>& segments)
 	return segment_size;
 }
 
+void sort_positions(device_vector<int>& positions, device_vector<ullong>& keys)
+{
+	sort_by_key(keys.begin(), keys.end(), positions.begin());
+}
+
 void get_sorted_positions(device_vector<int>& positions, const device_vector<uchar>& chars, device_vector<int>& output)
 {
 	device_vector<ullong> keys(positions.size());
@@ -251,11 +247,17 @@ void get_sorted_positions(device_vector<int>& positions, const device_vector<uch
 	while (true)
 	{
 		const auto seg_chars = static_cast<int>(ceil(static_cast<double>(segment_size) / CHARBITS));
-		create_hashes_with_seg(positions, chars, keys, helper, offset, segment_size, seg_chars);
+		const auto hashing_time = measure::execution_gpu(create_hashes_with_seg, positions, chars, keys, helper, offset, segment_size, seg_chars);
+
+		if (WRITETIME)
+			std::cout << hashing_time << " microseconds taken creating hashes" << std::endl;
 
 		offset += CHARSTOHASH - seg_chars;
 
-		sort_keys_and_positions(positions, keys);
+		const auto sorting_time = measure::execution_gpu(sort_positions, positions, keys);
+
+		if (WRITETIME)
+			std::cout << sorting_time << " microseconds taken sorting" << std::endl;
 
 		mark_singletons(positions, keys, destinations, helper, output);
 

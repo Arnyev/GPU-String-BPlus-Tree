@@ -249,9 +249,9 @@ bool test_random_strings()
 	thrust::device_vector<int> positions_device2(positions);
 
 	thrust::device_vector<int> sorted_positions;
-	std::cout << measure<>::execution(get_sorted_positions, positions_device, words_device, sorted_positions) << " Sorting random strings" << endl;
+	std::cout << measure::execution(get_sorted_positions, positions_device, words_device, sorted_positions) << " Sorting random strings" << endl;
 
-	std::cout << measure<>::execution(sort_positions_thrust, positions_device2, words_device) << " Sorting random strings thrust" << endl;
+	std::cout << measure::execution(sort_positions_thrust, positions_device2, words_device) << " Sorting random strings thrust" << endl;
 
 	const bool sorting_result = test_string_sorting(sorted_positions, words);
 
@@ -273,7 +273,7 @@ void get_gpu_result(const host_vector<int>& positions_dictionary, const host_vec
 	prepare_for_search(positions_dictionary, words_dictionary, positions_book_host, words_book,
 		positions_book, words, sorted_positions);
 
-	std::cout << measure<>::execution(find_if_strings_exist, positions_book, sorted_positions, words, result) << "gpu milliseconds taken finding result" << std::endl;
+	std::cout << measure::execution_gpu(find_if_strings_exist, positions_book, sorted_positions, words, result) << "gpu microseconds taken finding result" << std::endl;
 }
 
 void fill_result_vec(vector<bool>& result, const std::vector<std::string>& strings_book, const unordered_set<string>& dictionary)
@@ -318,7 +318,7 @@ void get_cpu_result(const host_vector<uchar>& words_dictionary, const host_vecto
 
 	const unordered_set<string> dictionary(strings_dictionary.begin(), strings_dictionary.end());
 
-	std::cout << measure<>::execution(fill_result_vec, result, strings_book, dictionary) << "cpu milliseconds taken finding result" << std::endl;
+	std::cout << measure::execution(fill_result_vec, result, strings_book, dictionary) << "cpu microseconds taken finding result" << std::endl;
 }
 
 bool test_array_searching_book(const char* dictionary_filename, const char* book_filename)
@@ -334,11 +334,11 @@ bool test_array_searching_book(const char* dictionary_filename, const char* book
 	device_vector<bool> gpu_result;
 	vector<bool> cpu_result;
 
-	std::cout << measure<>::execution(get_gpu_result, positions_dictionary_host, words_dictionary_host,
+	std::cout << measure::execution(get_gpu_result, positions_dictionary_host, words_dictionary_host,
 		positions_book_host, words_book_host, gpu_result) <<
-		"gpu milliseconds total taken finding result" << std::endl;
-	std::cout << measure<>::execution(get_cpu_result, words_dictionary_host, words_book_host, positions_book_host, cpu_result) <<
-		"cpu milliseconds total taken finding result" << std::endl;
+		"gpu microseconds total taken finding result" << std::endl;
+	std::cout << measure::execution(get_cpu_result, words_dictionary_host, words_book_host, positions_book_host, cpu_result) <<
+		"cpu microseconds total taken finding result" << std::endl;
 
 	if (gpu_result.size() != cpu_result.size())
 	{
