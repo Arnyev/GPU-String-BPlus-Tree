@@ -64,23 +64,18 @@ struct measure
 		cudaEvent_t stop;
 		float milliseconds = 0;
 
-		if (WRITETIME)
-		{
-			checkCudaErrors(cudaEventCreate(&start));
-			checkCudaErrors(cudaEventCreate(&stop));
-			checkCudaErrors(cudaDeviceSynchronize());
-			checkCudaErrors(cudaEventRecord(start));
-		}
+		checkCudaErrors(cudaEventCreate(&start));
+		checkCudaErrors(cudaEventCreate(&stop));
+		checkCudaErrors(cudaEventRecord(start));
+
 		std::forward<decltype(func)>(func)(std::forward<Args>(args)...);
 
-		if (WRITETIME)
-		{
-			checkCudaErrors(cudaEventRecord(stop));
-			checkCudaErrors(cudaEventSynchronize(stop));
-			checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));
-			checkCudaErrors(cudaEventDestroy(start));
-			checkCudaErrors(cudaEventDestroy(stop));
-		}
+		checkCudaErrors(cudaEventRecord(stop));
+		checkCudaErrors(cudaEventSynchronize(stop));
+		checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));
+		checkCudaErrors(cudaEventDestroy(start));
+		checkCudaErrors(cudaEventDestroy(stop));
+
 		return milliseconds * 1000;
 	}
 };

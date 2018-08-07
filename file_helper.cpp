@@ -1,7 +1,7 @@
 #include "parameters.h"
-#include <locale>
 #include <thrust/host_vector.h>
-#include <fstream> 
+#include <ctime>
+#include <iomanip>
 #include <cctype>
 
 std::vector<char> read_file_to_buffer(const char* filepath)
@@ -64,4 +64,26 @@ void read_file(const char* filepath, thrust::host_vector<int>& positions, thrust
 
 	for (int i = 0; i < CHARSTOHASH; i++)
 		words.push_back(BREAKCHAR);
+}
+
+void append_to_csv(const char* algorithm, const float build_time, const float sorting_time, const float execution_time,
+	const size_t dict_size, const size_t input_size, const double existing_percentage)
+{
+	int device;
+	cudaGetDevice(&device);
+
+	struct cudaDeviceProp props {};
+	cudaGetDeviceProperties(&props, device);
+
+	std::ofstream outfile;
+
+	const auto time_point = std::chrono::system_clock::now();
+
+	const auto time = std::chrono::system_clock::to_time_t(time_point);
+	struct tm timeinfo{};
+	localtime_s(&timeinfo, &time);
+
+	outfile.open("results.csv", std::ios_base::app);
+	outfile << std::put_time(&timeinfo, "%c") << ';' << algorithm << ';' << props.name << ';' << sorting_time << ';' << build_time << ';' <<
+		execution_time << ';' << dict_size << ';' << input_size << ';' << existing_percentage << std::endl;
 }

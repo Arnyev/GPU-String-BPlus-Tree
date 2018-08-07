@@ -94,7 +94,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />
-    <ClCompile Include="file_reading.cpp" />
+    <ClCompile Include="file_helper.cpp" />
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>

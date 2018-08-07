@@ -315,7 +315,7 @@ void find_if_strings_exist(const device_vector<int>& values_positions, const dev
 
 void prepare_for_search(const host_vector<int>& positions_dictionary_host, const host_vector<uchar>& words_dictionary_host,
 	const host_vector<int>& positions_book_host, const host_vector<uchar>& words_book_host, device_vector<int>& positions_book,
-	device_vector<unsigned char>& words, device_vector<int>& sorted_positions)
+	device_vector<unsigned char>& words, device_vector<int>& sorted_positions, float& sorting_time)
 {
 	device_vector<int> positions_dictionary(positions_dictionary_host);
 
@@ -328,7 +328,8 @@ void prepare_for_search(const host_vector<int>& positions_dictionary_host, const
 	copy(words_dictionary_host.begin(), words_dictionary_host.end(), words.begin());
 	copy(words_book_host.begin(), words_book_host.end(), words.begin() + words_dictionary_host.size());
 
-	get_sorted_positions(positions_dictionary, words, sorted_positions);
+	sorting_time = measure::execution_gpu(get_sorted_positions, positions_dictionary, words, sorted_positions);
+
 	const auto new_end = remove_if(sorted_positions.begin(), sorted_positions.begin() + sorted_positions.size(), equal_to_val<int, -1>());
 
 	const auto dict_count = new_end - sorted_positions.begin();

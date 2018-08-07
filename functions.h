@@ -18,13 +18,17 @@ void prepare_for_search(
 	const thrust::host_vector<int>& positions_dictionary_host,
 	const thrust::host_vector<uchar>& words_dictionary_host,
 	const thrust::host_vector<int>& positions_book_host,
-	const thrust::host_vector<uchar>& words_book_host, 
+	const thrust::host_vector<uchar>& words_book_host,
 	thrust::device_vector<int>& positions_book,
-	thrust::device_vector<unsigned char>& words, 
-	thrust::device_vector<int>& sorted_positions);
+	thrust::device_vector<unsigned char>& words,
+	thrust::device_vector<int>& sorted_positions,
+	float& sorting_time);
 
 void find_if_strings_exist(
 	const thrust::device_vector<int>& values_positions,
 	const thrust::device_vector<int>& input_positions,
 	const thrust::device_vector<uchar>& words,
 	thrust::device_vector<bool>& result);
+
+void append_to_csv(const char* algorithm, float build_time, float sorting_time, float execution_time, size_t dict_size,
+	size_t input_size, double existing_percentage);

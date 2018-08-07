@@ -2,6 +2,8 @@
 #include <string>
 #include <unordered_set>
 #include "functions.h"
+#include <numeric>
+#include <helper_cuda.h>
 
 using namespace std;
 
@@ -263,18 +265,6 @@ bool test_random_strings()
 }
 
 using namespace thrust;
-void get_gpu_result(const host_vector<int>& positions_dictionary, const host_vector<uchar>& words_dictionary,
-	const host_vector<int>& positions_book_host, const host_vector<uchar>& words_book, device_vector<bool>& result)
-{
-	device_vector<int> positions_book;
-	device_vector<unsigned char> words;
-	device_vector<int> sorted_positions;
-
-	prepare_for_search(positions_dictionary, words_dictionary, positions_book_host, words_book,
-		positions_book, words, sorted_positions);
-
-	std::cout << measure::execution_gpu(find_if_strings_exist, positions_book, sorted_positions, words, result) << "gpu microseconds taken finding result" << std::endl;
-}
 
 void fill_result_vec(vector<bool>& result, const std::vector<std::string>& strings_book, const unordered_set<string>& dictionary)
 {
@@ -334,30 +324,36 @@ bool test_array_searching_book(const char* dictionary_filename, const char* book
 	device_vector<bool> gpu_result;
 	vector<bool> cpu_result;
 
-	std::cout << measure::execution(get_gpu_result, positions_dictionary_host, words_dictionary_host,
-		positions_book_host, words_book_host, gpu_result) <<
-		"gpu microseconds total taken finding result" << std::endl;
-	std::cout << measure::execution(get_cpu_result, words_dictionary_host, words_book_host, positions_book_host, cpu_result) <<
-		"cpu microseconds total taken finding result" << std::endl;
+	device_vector<int> positions_book;
+	device_vector<unsigned char> words;
+	device_vector<int> sorted_positions;
+
+	float sorting_time;
+
+	const auto time_preparing = measure::execution(prepare_for_search, positions_dictionary_host, words_dictionary_host,
+		positions_book_host, words_book_host, positions_book, words, sorted_positions, sorting_time);
+
+	const auto build_time = (static_cast<float>(time_preparing) - sorting_time) / 1000;
+	const auto time_finding = measure::execution_gpu(find_if_strings_exist, positions_book, sorted_positions, words, gpu_result);
+
+	get_cpu_result(words_dictionary_host, words_book_host, positions_book_host, cpu_result);
 
 	if (gpu_result.size() != cpu_result.size())
-	{
-		cout << "fail searching result";
 		return false;
-	}
-	auto strings_book = get_sorted_cpu_words(words_book_host);
 
 	auto vec_result = from_vector_dev(gpu_result);
 	for (size_t i = 0; i < cpu_result.size(); i++)
-	{
 		if (cpu_result[i] != vec_result[i])
-		{
-			auto s = strings_book[i];
-			cout << "fail searching result";
 			return false;
-		}
-	}
 
-	cout << "array searching win" << endl;
+	int existing = 0;
+	for (const auto res : cpu_result)
+		if (res)
+			existing++;
+
+	const auto percent_existing = static_cast<double>(existing) / cpu_result.size();
+
+	append_to_csv("Thrust binary search", build_time, sorting_time / 1000, time_finding / 1000, sorted_positions.size(), positions_book_host.size(), percent_existing);
+
 	return true;
 }

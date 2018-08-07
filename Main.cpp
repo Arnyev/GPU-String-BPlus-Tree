@@ -78,6 +78,7 @@ int main(const int argc, char **argv)
 		return 0;
 
 	test_array_searching_book("dictionary.txt", "oliverTwist.txt");
+	test_array_searching_book("dictionary.txt", "book.txt");
 
 	cout << "Randoms" << endl;
 	test_random_strings();
