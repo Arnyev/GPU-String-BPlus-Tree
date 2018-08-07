@@ -1,18 +1,32 @@
 #pragma once
-#include "helpers.h"
 
-struct sorting_output
-{
-	ullong* hashes;
-	int* positions;
-	uchar* suffixes;
-	int hashes_count;
-	int suffixes_size;
-};
+#include "parameters.h"
 
-sorting_output create_output(unsigned char* d_wordArray, int* d_sortedPositions, int word_count);
-int* get_sorted_positions(int* d_word_positions, int word_count, unsigned char* d_word_array);
-bool test_string_sorting(int * d_sorted_positions, int word_count, unsigned char * h_word_array, size_t word_array_size);
-bool test_output(unsigned char* h_word_array, int chars_input_count, sorting_output output);
-std::vector<std::string> get_sorted_cpu_words(unsigned char* h_word_array, size_t word_array_size);
+std::vector<char> read_file_to_buffer(const char* filepath);
+void read_file(const char* filepath, thrust::host_vector<int>& positions, thrust::host_vector<uchar>& words);
+void create_output(const thrust::device_vector<uchar>& words, thrust::device_vector<int>& sorted_positions, sorting_output_gpu& output);
+void get_sorted_positions(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars, thrust::device_vector<int>& output);
+void sort_positions_thrust(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars);
 bool test_random_strings();
+void test_gpu_tree(char* const dictionaryFilename, char* const bookFilename, bool showMissingWords = false);
+bool test_array_searching_book(const char* dictionary_filename, const char* book_filename);
+bool test_book(const char* filename);
+void generate_random_strings(thrust::host_vector<uchar>& words, thrust::host_vector<int>& positions);
+
+std::vector<std::string> get_sorted_unique_cpu_words(const thrust::host_vector<uchar> & words_chars);
+std::vector<std::string> get_sorted_cpu_words(const thrust::host_vector<uchar>& words_chars);
+
+void prepare_for_search(
+	const thrust::host_vector<int>& positions_dictionary_host,
+	const thrust::host_vector<uchar>& words_dictionary_host,
+	const thrust::host_vector<int>& positions_book_host,
+	const thrust::host_vector<uchar>& words_book_host, 
+	thrust::device_vector<int>& positions_book,
+	thrust::device_vector<unsigned char>& words, 
+	thrust::device_vector<int>& sorted_positions);
+
+void find_if_strings_exist(
+	const thrust::device_vector<int>& values_positions,
+	const thrust::device_vector<int>& input_positions,
+	const thrust::device_vector<uchar>& words,
+	thrust::device_vector<bool>& result);

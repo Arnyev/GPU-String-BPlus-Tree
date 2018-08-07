@@ -9,7 +9,7 @@
 #include "bplus_tree_gpu.cuh"
 #include "gpu_helper.cuh"
 #include "not_implemented.h"
-#include "sort_helpers.cuh"
+#include "parameters.h"
 
 template <class HASH, int B>
 class bplus_tree_cpu : public bplus_tree<HASH, B> 
@@ -523,8 +523,8 @@ bool bplus_tree_cpu<HASH, B>::exist_word(const char* word)
 {
 	const char nullByte = static_cast<char>(0);
 	const int maxLen = 13;
-	const int wordLen = strlen(word);
-	const ullong hash = get_hash(reinterpret_cast<const uchar*>(word), CHARSTOHASH, 0);
+	const int wordLen = static_cast<int>(strlen(word));
+	const ullong hash = get_hash<HASH>(word, 0);
 	int index = -1;
 	int endSuffixIndex = -1;
 	{
@@ -550,7 +550,7 @@ bool bplus_tree_cpu<HASH, B>::exist_word(const char* word)
 				}
 				else //It is the last element in the last leaf
 				{
-					endSuffixIndex = suffixes.size();
+					endSuffixIndex = static_cast<int>(suffixes.size());
 				}
 			}
 		}

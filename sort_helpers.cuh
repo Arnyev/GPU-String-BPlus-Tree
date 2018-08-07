@@ -60,10 +60,9 @@ template<class HASH>
 constexpr int chars_in_type = __chars_to_hash<sizeof(HASH)>;
 
 template<class HASH, class CHAR>
-__device__ __host__ __inline__ typename std::enable_if<std::is_integral<HASH>::value &&
-														(std::is_same<CHAR, char>::value || std::is_same<CHAR, unsigned char>::value) &&
-														(chars_in_type<HASH> > 0), HASH>::type get_hash(
-	const CHAR* words, const int my_position)
+__device__ __host__ __inline__ typename std::enable_if<
+	std::is_integral<HASH>::value && (std::is_same<CHAR, char>::value || std::is_same<CHAR, unsigned char>::value) && (
+		chars_in_type<HASH> > 0), HASH>::type get_hash(const CHAR* words, const int my_position)
 {
 	const int chars_to_hash = chars_in_type<HASH>;
 
@@ -92,40 +91,4 @@ __device__ __host__ __inline__ typename std::enable_if<std::is_integral<HASH>::v
 		last_bit = 0;
 
 	return static_cast<HASH>(hash << 1 | last_bit);
-}
-
-__device__ __host__ __inline__ ullong get_hash(const uchar* words, const int chars_to_hash, const int my_position)
-{
-	uchar last_bit = 1;
-	uchar char_mask = CHARMASK;
-
-	ullong hash = 0;
-	int i = 0;
-	for (; i < chars_to_hash; i++)
-	{
-		const unsigned char c = words[i + my_position];
-		if (c == BREAKCHAR)
-		{
-			char_mask = 0;
-			last_bit = 0;
-			++i;
-			break;
-		}
-		hash *= ALPHABETSIZE;
-		hash += c & char_mask;
-	}
-	for (; i < chars_to_hash; i++)
-	{
-		hash *= ALPHABETSIZE;
-	}
-	if (!char_mask || words[chars_to_hash + my_position] == BREAKCHAR)
-		last_bit = 0;
-
-	return hash << 1 | last_bit;
-}
-
-inline void compute_grid_size(uint n, uint block_size, uint &num_blocks, uint &num_threads)
-{
-	num_threads = block_size < n ? block_size : n;
-	num_blocks = (n % num_threads != 0) ? (n / num_threads + 1) : (n / num_threads);
 }

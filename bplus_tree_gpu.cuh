@@ -270,6 +270,7 @@ __global__ void kernel_find_words(const int threadsNum, HASH* keysArray, int* in
 template <class HASH, int B>
 class bplus_tree_gpu : public bplus_tree<HASH, B>
 {
+	float m_elapsedTime;
 public:
 	char* suffixes;
 	int suffixesSize;
@@ -302,6 +303,8 @@ public:
 	void bulk_insert(HASH* keys, int* values, int size) override;
 
 	int get_height() override;
+
+	float last_gpu_time() const;
 };
 
 template <class HASH, int B>
@@ -313,6 +316,10 @@ void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size, c
 	HASH* d_hashes;
 	int* d_values;
 	suffixesSize = suffixesLength;
+	cudaEvent_t startEvent, stopEvent;
+	gpuErrchk(cudaEventCreate(&startEvent));
+	gpuErrchk(cudaEventCreate(&stopEvent));
+	gpuErrchk(cudaEventRecord(startEvent));
 	gpuErrchk(cudaMalloc(&(this->suffixes), suffixesLength * sizeof(char)));
 	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
 	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
@@ -346,9 +353,11 @@ void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size, c
 		beginIndex = endIndex;
 		endIndex = endIndex + lastCreated;
 	}
+	gpuErrchk(cudaEventRecord(stopEvent));
+	gpuErrchk(cudaEventSynchronize(stopEvent));
+	gpuErrchk(cudaEventElapsedTime(&m_elapsedTime, startEvent, stopEvent));
 	rootNodeIndex = endIndex - 1;
 	usedNodes = endIndex;
-	gpuErrchk(cudaDeviceSynchronize());
 }
 
 template <class HASH, int B>
@@ -423,6 +432,10 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wor
 	char *d_words;
 	int *d_indexes;
 	bool *d_output;
+	cudaEvent_t startEvent, stopEvent;
+	gpuErrchk(cudaEventCreate(&startEvent));
+	gpuErrchk(cudaEventCreate(&stopEvent));
+	gpuErrchk(cudaEventRecord(startEvent));
 	gpuErrchk(cudaMalloc(&d_indexes, indexesSize * sizeof(int)));
 	gpuErrchk(cudaMalloc(&d_words, wordsSize * sizeof(char)));
 	gpuErrchk(cudaMalloc(&d_output, indexesSize * sizeof(bool)));
@@ -441,6 +454,9 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wor
 	gpuErrchk(cudaFree(d_words));
 	gpuErrchk(cudaFree(d_indexes));
 	gpuErrchk(cudaFree(d_output));
+	gpuErrchk(cudaEventRecord(stopEvent));
+	gpuErrchk(cudaEventSynchronize(stopEvent));
+	gpuErrchk(cudaEventElapsedTime(&m_elapsedTime, startEvent, stopEvent));
 	std::vector<bool> v(output, output + elementNum);
 	delete[] output;
 	return v;
@@ -490,4 +506,10 @@ template <class HASH, int B>
 int bplus_tree_gpu<HASH, B>::get_height()
 {
 	return height;
+}
+
+template <class HASH, int B>
+float bplus_tree_gpu<HASH, B>::last_gpu_time() const
+{
+	return m_elapsedTime;
 }
