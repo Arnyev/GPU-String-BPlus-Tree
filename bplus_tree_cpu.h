@@ -524,7 +524,7 @@ bool bplus_tree_cpu<HASH, B>::exist_word(const char* word)
 	const char nullByte = static_cast<char>(0);
 	const int maxLen = 13;
 	const int wordLen = static_cast<int>(strlen(word));
-	const ullong hash = get_hash(reinterpret_cast<const uchar*>(word), CHARSTOHASH, 0);
+	const ullong hash = get_hash<HASH>(word, 0);
 	int index = -1;
 	int endSuffixIndex = -1;
 	{

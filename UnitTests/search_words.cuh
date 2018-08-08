@@ -5,6 +5,7 @@
 #include "../sort_helpers.cuh"
 #include "../parameters.h"
 #include <tuple>
+#include <random>
 #include <numeric>
 
 using HASH = unsigned long long;
@@ -208,3 +209,64 @@ bool repeating_prefixes_2()
 	};
 	return do_test(words, toMiss);
 }
+
+template<typename Generator>
+std::string random_string(std::vector<char> &alphabet, int minLen, int maxLen, Generator &gen)
+{
+	int len = (gen() % (maxLen - minLen + 1)) + minLen;
+	int alphaSize = alphabet.size();
+	std::string str(len, ' ');
+	std::generate_n(str.begin(), len, [alphaSize, &alphabet, &gen]() -> char { return alphabet[gen() % alphaSize]; });
+	return str;
+}
+
+class great_test_t
+{
+	int m_dictSize;
+	int m_minLen;
+	int m_maxLen;
+	int m_findSize;
+	int m_seed;
+	std::vector<char> m_alphabet;
+public:
+	great_test_t(int maxDictSize, int minLen, int maxLen, int findSize, std::vector<char> &&alphabet, int seed) : m_alphabet(alphabet)
+	{
+		m_dictSize = maxDictSize;
+		m_minLen = minLen;
+		m_maxLen = maxLen;
+		m_findSize = findSize;
+		m_seed = seed;
+	}
+	bool operator()()
+	{
+		std::minstd_rand generator(m_seed);
+		std::vector<std::string> dictWords(m_dictSize);
+		std::generate_n(dictWords.begin(), m_dictSize, [this, &generator]() -> std::string { return random_string(this->m_alphabet, this->m_minLen, this->m_maxLen, generator); });
+		std::sort(dictWords.begin(), dictWords.end());
+		dictWords.resize(std::distance(dictWords.begin(), std::unique(dictWords.begin(), dictWords.end())));
+
+		std::vector<HASH> hashes = get_hashes(dictWords);
+		sort_by_hashes(dictWords, hashes);
+		remove_duplicates(hashes);
+		std::vector<char> suffixes;
+		std::vector<int> positions;
+		std::tie(suffixes, positions) = get_suffixes(dictWords);
+		bplus_tree_gpu<HASH, PAGE_SIZE> tree(hashes.data(), positions.data(), hashes.size(), suffixes.data(), suffixes.size());
+
+		std::vector<std::string> toFind(m_findSize);
+		std::generate_n(toFind.begin(), m_findSize, [this, &generator]() -> std::string { return random_string(this->m_alphabet, this->m_minLen, this->m_maxLen, generator); });
+		std::string concated;
+		std::vector<int> positionsInConcat;
+		std::tie(concated, positionsInConcat) = concat_words(toFind);
+
+		auto result = tree.exist_word(concated.c_str(), concated.size(), positionsInConcat.data(), positionsInConcat.size());
+		for (int i = 0; i < toFind.size(); ++i)
+		{
+			if (std::binary_search(dictWords.begin(), dictWords.end(), toFind[i]) != result[i])
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+};

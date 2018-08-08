@@ -2,11 +2,13 @@
 
 #include "parameters.h"
 
+std::vector<char> read_file_to_buffer(const char* filepath);
 void read_file(const char* filepath, thrust::host_vector<int>& positions, thrust::host_vector<uchar>& words);
 void create_output(const thrust::device_vector<uchar>& words, thrust::device_vector<int>& sorted_positions, sorting_output_gpu& output);
 void get_sorted_positions(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars, thrust::device_vector<int>& output);
 void sort_positions_thrust(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars);
 bool test_random_strings();
+void test_gpu_tree(char* const dictionaryFilename, char* const bookFilename, bool showMissingWords = false);
 bool test_array_searching_book(const char* dictionary_filename, const char* book_filename);
 bool test_book(const char* filename);
 void generate_random_strings(thrust::host_vector<uchar>& words, thrust::host_vector<int>& positions);
