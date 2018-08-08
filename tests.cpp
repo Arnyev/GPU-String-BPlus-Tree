@@ -2,17 +2,14 @@
 #include <string>
 #include <unordered_set>
 #include "functions.h"
-<<<<<<< HEAD
 #include <numeric>
 #include <helper_cuda.h>
-=======
 #include "sort_helpers.cuh"
 #include "bplus_tree_gpu.cuh"
 #include <iomanip>
 #include <cctype>
 #include <regex>
 #include <set>
->>>>>>> f7d664c89444c4569063d24289b5304377392ea2
 
 using namespace std;
 
