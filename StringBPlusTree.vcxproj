@@ -91,11 +91,12 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   <ItemGroup>
     <CudaCompile Include="bplus_tree_gpu.cu" />
     <CudaCompile Include="sort_strings.cu" />
+    <CudaCompile Include="Main.cpp" />
+    <CudaCompile Include="tests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />
     <ClCompile Include="file_helper.cpp" />
-    <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bplus_tree.h" />
@@ -103,10 +104,8 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <ClInclude Include="bplus_tree_gpu.cuh" />
     <ClInclude Include="functions.h" />
     <ClInclude Include="gpu_helper.cuh" />
+    <ClInclude Include="gpu_test.cuh" />
     <ClInclude Include="not_implemented.h" />
-    <ClCompile Include="tests.cpp">
-      <FileType>CppHeader</FileType>
-    </ClCompile>
     <ClInclude Include="parameters.h" />
     <ClInclude Include="sort_helpers.cuh" />
     <ClInclude Include="sort_strings.cuh" />

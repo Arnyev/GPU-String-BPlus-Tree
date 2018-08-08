@@ -3,11 +3,11 @@
   <ItemGroup>
     <CudaCompile Include="bplus_tree_gpu.cu" />
     <CudaCompile Include="sort_strings.cu" />
+    <CudaCompile Include="Main.cpp" />
+    <CudaCompile Include="tests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />
-    <ClCompile Include="Main.cpp" />
-    <ClCompile Include="tests.cpp" />
     <ClCompile Include="file_helper.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -20,5 +20,6 @@
     <ClInclude Include="sort_strings.cuh" />
     <ClInclude Include="parameters.h" />
     <ClInclude Include="sort_helpers.cuh" />
+    <ClInclude Include="gpu_test.cuh" />
   </ItemGroup>
 </Project>

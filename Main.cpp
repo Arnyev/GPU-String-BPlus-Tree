@@ -2,6 +2,7 @@
 #include "functions.h"
 #include "sort_strings.cuh"
 #include <helper_cuda.h>
+#include "gpu_test.cuh"
 
 using namespace std;
 
@@ -13,8 +14,15 @@ int main(const int argc, char **argv)
 	if (cudaMalloc(&test, 4 * 4))
 		return 0;
 
-	test_gpu_tree("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 4>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 6>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 8>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 10>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 12>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 14>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 16>("dictionary_clean.txt", "oliverTwist.txt");
 	test_array_searching_book("dictionary.txt", "oliverTwist.txt");
+	return 0;
 	test_array_searching_book("dictionary.txt", "book.txt");
 
 	cout << "Randoms" << endl;

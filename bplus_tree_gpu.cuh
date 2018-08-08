@@ -238,7 +238,7 @@ __global__ void kernel_find_words(const int threadsNum, HASH* keysArray, int* in
 			char *endSuffixIt = suffixes + endSuffixIdx;
 			for (char *suffixIt = suffixes + suffixIdx; suffixIt < endSuffixIt; ++suffixIt)
 			{
-				char *wordIt = words + beginIdx + CHARSTOHASH; //Pointer to suffix of the word
+				char *wordIt = words + beginIdx + chars_in_type<HASH>; //Pointer to suffix of the word
 				while (*suffixIt != nullByte && *wordIt != nullByte)
 				{
 					if (*suffixIt != *wordIt)
