@@ -156,6 +156,12 @@ __global__ void copy_suffixes_d(const uchar* words, const int* positions, const 
 	if (len == 0)
 		return;
 
+	if (len == 1)
+	{
+		suffixes[suffix_pos] = BREAKCHAR;
+		return;
+	}
+
 	const int position = positions[thread_num] + CHARSTOHASH;
 
 	for (int i = 0; i < len; i++)
@@ -294,7 +300,6 @@ void create_output(const device_vector<uchar>& words, device_vector<int>& sorted
 	result.suffixes.resize(output_size);
 
 	copy_suffixes(words, sorted_positions, word_count, result.positions, result.suffixes);
-
 	result.hashes.resize(word_count);
 	transform(sorted_positions.begin(), sorted_positions.begin()+word_count, result.hashes.begin(), hash_functor(words.data().get()));
 
@@ -315,11 +320,13 @@ void find_if_strings_exist(const device_vector<int>& values_positions, const dev
 
 void prepare_for_search(const host_vector<int>& positions_dictionary_host, const host_vector<uchar>& words_dictionary_host,
 	const host_vector<int>& positions_book_host, const host_vector<uchar>& words_book_host, device_vector<int>& positions_book,
-	device_vector<unsigned char>& words, device_vector<int>& sorted_positions, float& sorting_time)
+	device_vector<unsigned char>& words, device_vector<int>& positions_dictionary)
 {
-	device_vector<int> positions_dictionary(positions_dictionary_host);
+	positions_dictionary.resize(positions_dictionary_host.size());
+	thrust::copy(positions_dictionary_host.begin(), positions_dictionary_host.end(), positions_dictionary.begin());
 
-	positions_book = positions_book_host;
+	positions_book.resize(positions_book_host.size());
+	thrust::copy(positions_book_host.begin(), positions_book_host.end(), positions_book.begin());
 
 	using namespace thrust::placeholders;
 	transform(positions_book.begin(), positions_book.end(), positions_book.begin(), _1 + words_dictionary_host.size());
@@ -327,11 +334,4 @@ void prepare_for_search(const host_vector<int>& positions_dictionary_host, const
 	words = device_vector<uchar>(words_dictionary_host.size() + words_book_host.size() + CHARSTOHASH);
 	copy(words_dictionary_host.begin(), words_dictionary_host.end(), words.begin());
 	copy(words_book_host.begin(), words_book_host.end(), words.begin() + words_dictionary_host.size());
-
-	sorting_time = measure::execution_gpu(get_sorted_positions, positions_dictionary, words, sorted_positions);
-
-	const auto new_end = remove_if(sorted_positions.begin(), sorted_positions.begin() + sorted_positions.size(), equal_to_val<int, -1>());
-
-	const auto dict_count = new_end - sorted_positions.begin();
-	sorted_positions.resize(dict_count);
 }

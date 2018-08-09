@@ -97,6 +97,6 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, boo
 	}
 	std::stringstream stream;
 	stream << "bplus_tree_gpu<" << typeid(HASH).name() << ", " << PAGE_SIZE << "> v" << Version;
-	append_to_csv(stream.str().c_str(), NAN , NAN, tree.last_gpu_time(), hashes.size(), result.size(), static_cast<float>(found) / result.size());
+	append_to_csv(stream.str().c_str(), NAN, tree.last_gpu_time(), hashes.size(), result.size(), static_cast<float>(found) / result.size());
 	return;
 }

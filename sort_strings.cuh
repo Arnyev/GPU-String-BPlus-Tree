@@ -93,11 +93,10 @@ struct compute_postfix_length_functor : thrust::unary_function<int, int>
 			c = words[my_position];
 
 			if (c == BREAKCHAR)
-				break;
+				return length + 1;
+
 			my_position++;
 			length++;
 		}
-
-		return length + 1;
 	}
 };

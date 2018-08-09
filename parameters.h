@@ -30,6 +30,7 @@ void __syncthreads();
 #define CHARMASK ~static_cast<uchar>(3 << 5);
 #define WRITETIME 1
 #define TOLOWERMASK (1<<5)
+#define TREEPAGE 16384
 
 struct sorting_output_gpu
 {

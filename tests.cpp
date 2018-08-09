@@ -4,12 +4,8 @@
 #include "functions.h"
 #include <numeric>
 #include <helper_cuda.h>
-#include "sort_helpers.cuh"
-#include "bplus_tree_gpu.cuh"
-#include <iomanip>
 #include <cctype>
 #include <regex>
-#include <set>
 
 using namespace std;
 
@@ -288,29 +284,8 @@ void get_cpu_result(const host_vector<uchar>& words_dictionary, const host_vecto
 	const host_vector<int>& positions_book, vector<bool>& result)
 {
 	auto strings_dictionary = get_sorted_unique_cpu_words(words_dictionary);
-	vector<string> strings_book(positions_book.size());
-	vector<uchar> chars;
-
-	for (size_t i = 0; i < strings_book.size(); i++)
-	{
-		const auto position = positions_book[i];
-		int index_in_word = 0;
-		while (true)
-		{
-			const auto c = words_book[position + index_in_word];
-			if (c != BREAKCHAR)
-			{
-				chars.push_back(c);
-				index_in_word++;
-			}
-			else
-			{
-				strings_book[i] = string(chars.begin(), chars.end());
-				chars.clear();
-				break;
-			}
-		}
-	}
+	vector<string> strings_book;
+	create_strings(words_book, positions_book, strings_book);
 
 	const unordered_set<string> dictionary(strings_dictionary.begin(), strings_dictionary.end());
 
@@ -334,12 +309,9 @@ bool test_array_searching_book(const char* dictionary_filename, const char* book
 	device_vector<unsigned char> words;
 	device_vector<int> sorted_positions;
 
-	float sorting_time;
+	const auto build_time = measure::execution_gpu(prepare_for_search, positions_dictionary_host, words_dictionary_host,
+		positions_book_host, words_book_host, positions_book, words, sorted_positions);
 
-	const auto time_preparing = measure::execution(prepare_for_search, positions_dictionary_host, words_dictionary_host,
-		positions_book_host, words_book_host, positions_book, words, sorted_positions, sorting_time);
-
-	const auto build_time = (static_cast<float>(time_preparing) - sorting_time) / 1000;
 	const auto time_finding = measure::execution_gpu(find_if_strings_exist, positions_book, sorted_positions, words, gpu_result);
 
 	get_cpu_result(words_dictionary_host, words_book_host, positions_book_host, cpu_result);
@@ -359,7 +331,7 @@ bool test_array_searching_book(const char* dictionary_filename, const char* book
 
 	const auto percent_existing = static_cast<double>(existing) / cpu_result.size();
 
-	append_to_csv("Thrust binary search", build_time, sorting_time / 1000, time_finding / 1000, sorted_positions.size(), positions_book_host.size(), percent_existing);
+	append_to_csv("Thrust binary search", build_time / 1000, time_finding / 1000, sorted_positions.size(), positions_book_host.size(), percent_existing);
 
 	return true;
 }

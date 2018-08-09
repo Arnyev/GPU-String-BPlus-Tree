@@ -91,6 +91,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CudaCompile Include="gpu_tests.cu" />
     <CudaCompile Include="bplus_tree_gpu.cu" />
     <CudaCompile Include="sort_strings.cu" />
     <CudaCompile Include="Main.cpp" />

@@ -5,6 +5,7 @@
     <CudaCompile Include="sort_strings.cu" />
     <CudaCompile Include="Main.cpp" />
     <CudaCompile Include="tests.cpp" />
+    <CudaCompile Include="gpu_tests.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />

@@ -1,6 +1,5 @@
 #include "bplus_tree_cpu.h"
 #include "functions.h"
-#include "sort_strings.cuh"
 #include <helper_cuda.h>
 #include "gpu_test.cuh"
 
@@ -24,6 +23,8 @@ int main(const int argc, char **argv)
 	test_gpu_tree<uint64_t, 4096, 2>("dictionary_clean.txt", "oliverTwist.txt");
 	test_gpu_tree<uint64_t, 8192, 2>("dictionary_clean.txt", "oliverTwist.txt");
 	test_gpu_tree<uint64_t, 16384, 2>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree_vectors("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree_vectors("dictionary_clean.txt", "oliverTwist.txt");
 	test_array_searching_book("dictionary_clean.txt", "oliverTwist.txt");
 	test_array_searching_book("dictionary_clean.txt", "oliverTwist.txt");
 	return 0;

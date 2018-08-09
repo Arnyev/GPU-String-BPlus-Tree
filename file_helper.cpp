@@ -66,7 +66,34 @@ void read_file(const char* filepath, thrust::host_vector<int>& positions, thrust
 		words.push_back(BREAKCHAR);
 }
 
-void append_to_csv(const char* algorithm, const float build_time, const float sorting_time, const float execution_time,
+void create_strings(const thrust::host_vector<uchar>& words_book, const thrust::host_vector<int>& positions_book, std::vector<std::string>& strings_book)
+{
+	strings_book.resize(positions_book.size());
+	std::vector<uchar> chars;
+
+	for (size_t i = 0; i < strings_book.size(); i++)
+	{
+		const auto position = positions_book[i];
+		int index_in_word = 0;
+		while (true)
+		{
+			const auto c = words_book[position + index_in_word];
+			if (c != BREAKCHAR)
+			{
+				chars.push_back(c);
+				index_in_word++;
+			}
+			else
+			{
+				strings_book[i] = std::string(chars.begin(), chars.end());
+				chars.clear();
+				break;
+			}
+		}
+	}
+}
+
+void append_to_csv(const char* algorithm, const float build_time, const float execution_time,
 	const size_t dict_size, const size_t input_size, const double existing_percentage)
 {
 	int device;
@@ -84,6 +111,6 @@ void append_to_csv(const char* algorithm, const float build_time, const float so
 	localtime_s(&timeinfo, &time);
 
 	outfile.open("results.csv", std::ios_base::app);
-	outfile << std::put_time(&timeinfo, "%c") << ';' << algorithm << ';' << props.name << ';' << sorting_time << ';' << build_time << ';' <<
-		execution_time << ';' << dict_size << ';' << input_size << ';' << existing_percentage << std::endl;
+	outfile << std::put_time(&timeinfo, "%c") << ",\t\t" << algorithm << ",\t\t" << props.name << ",\t\t" << build_time << ",\t\t" <<
+		execution_time << ",\t\t" << dict_size << ",\t\t" << input_size << ",\t\t" << existing_percentage << std::endl;
 }

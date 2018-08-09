@@ -10,6 +10,8 @@ void sort_positions_thrust(thrust::device_vector<int>& positions, const thrust::
 bool test_random_strings();
 bool test_array_searching_book(const char* dictionary_filename, const char* book_filename);
 bool test_book(const char* filename);
+void test_gpu_tree_vectors(const char* dictionary_filename, const char* book_filename);
+void create_strings(const thrust::host_vector<uchar>& words_book, const thrust::host_vector<int>& positions_book, std::vector<std::string>& strings_book);
 void generate_random_strings(thrust::host_vector<uchar>& words, thrust::host_vector<int>& positions);
 
 std::vector<std::string> get_sorted_unique_cpu_words(const thrust::host_vector<uchar> & words_chars);
@@ -22,8 +24,7 @@ void prepare_for_search(
 	const thrust::host_vector<uchar>& words_book_host,
 	thrust::device_vector<int>& positions_book,
 	thrust::device_vector<unsigned char>& words,
-	thrust::device_vector<int>& sorted_positions,
-	float& sorting_time);
+	thrust::device_vector<int>& positions_dictionary);
 
 void find_if_strings_exist(
 	const thrust::device_vector<int>& values_positions,
@@ -31,5 +32,8 @@ void find_if_strings_exist(
 	const thrust::device_vector<uchar>& words,
 	thrust::device_vector<bool>& result);
 
-void append_to_csv(const char* algorithm, float build_time, float sorting_time, float execution_time, size_t dict_size,
+void append_to_csv(const char* algorithm, float build_time, float execution_time, size_t dict_size,
 	size_t input_size, double existing_percentage);
+
+void get_cpu_result(const thrust::host_vector<uchar>& words_dictionary, const thrust::host_vector<uchar>& words_book,
+	const thrust::host_vector<int>& positions_book, std::vector<bool>& result);
