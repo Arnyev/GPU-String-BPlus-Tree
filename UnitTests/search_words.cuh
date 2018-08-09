@@ -110,7 +110,7 @@ bool do_test(words_list &words, missing_words_list &missingWords)
 	std::string concated;
 	std::vector<int> positionsInConcat;
 	std::tie(concated, positionsInConcat) = concat_words(toSearch);
-	auto result = tree.exist_word(concated.c_str(), concated.size(), positionsInConcat.data(), positionsInConcat.size());
+	auto result = tree.exist_word<2>(concated.c_str(), concated.size(), positionsInConcat.data(), positionsInConcat.size());
 	for (int i = 0; i < result.size(); ++i)
 	{
 		if ((failIndexes.find(i) != failIndexes.end()) == (result[i]))
@@ -259,7 +259,7 @@ public:
 		std::vector<int> positionsInConcat;
 		std::tie(concated, positionsInConcat) = concat_words(toFind);
 
-		auto result = tree.exist_word(concated.c_str(), concated.size(), positionsInConcat.data(), positionsInConcat.size());
+		auto result = tree.exist_word<2>(concated.c_str(), concated.size(), positionsInConcat.data(), positionsInConcat.size());
 		for (int i = 0; i < toFind.size(); ++i)
 		{
 			if (std::binary_search(dictWords.begin(), dictWords.end(), toFind[i]) != result[i])
