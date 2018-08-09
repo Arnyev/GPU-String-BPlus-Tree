@@ -14,13 +14,12 @@ int main(const int argc, char **argv)
 	if (cudaMalloc(&test, 4 * 4))
 		return 0;
 
-	test_gpu_tree<uint64_t, 4>("dictionary_clean.txt", "oliverTwist.txt");
-	test_gpu_tree<uint64_t, 6>("dictionary_clean.txt", "oliverTwist.txt");
-	test_gpu_tree<uint64_t, 8>("dictionary_clean.txt", "oliverTwist.txt");
-	test_gpu_tree<uint64_t, 10>("dictionary_clean.txt", "oliverTwist.txt");
-	test_gpu_tree<uint64_t, 12>("dictionary_clean.txt", "oliverTwist.txt");
-	test_gpu_tree<uint64_t, 14>("dictionary_clean.txt", "oliverTwist.txt");
-	test_gpu_tree<uint64_t, 16>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 512>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 1024>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 2048>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 4096>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 8192>("dictionary_clean.txt", "oliverTwist.txt");
+	test_gpu_tree<uint64_t, 16384>("dictionary_clean.txt", "oliverTwist.txt");
 	test_array_searching_book("dictionary.txt", "oliverTwist.txt");
 	return 0;
 	test_array_searching_book("dictionary.txt", "book.txt");

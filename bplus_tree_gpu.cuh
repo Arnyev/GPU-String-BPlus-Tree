@@ -174,7 +174,6 @@ __global__ void kernel_find_words(const int threadsNum, HASH* keysArray, int* in
 	{
 		const int beginIdx = beginIndexes[id];
 		const HASH key = get_hash<HASH>(words, beginIdx);
-		//const HASH key = get_hash(reinterpret_cast<uchar*>(words), CHARSTOHASH, beginIdx);
 		int currentHeight = 0;
 		int node = rootIndex;
 		//Inner nodes
@@ -183,12 +182,19 @@ __global__ void kernel_find_words(const int threadsNum, HASH* keysArray, int* in
 			const int size = sizeArray[node];
 			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
 			const HASH *keys_end = keys_begin + size;
-			const HASH *keys = keys_begin;
-			while (keys < keys_end && *keys <= key)
+			const HASH *keys;
+			while (keys_begin + 1 != keys_end)
 			{
-				++keys;
+				keys = keys_begin + ((keys_end - keys_begin) >> 1);
+				if (*keys <= key)
+					keys_begin = keys;
+				else
+					keys_end = keys;
 			}
-			node = indexesArray[node * maxIndexesPerNode + (keys - keys_begin)];
+			if (*keys_begin <= key)
+				++keys_begin;
+			node = indexesArray[node * maxIndexesPerNode + keys_begin - (keysArray + node * maxKeysPerNode)];
+			//node = indexesArray[node * maxIndexesPerNode + (keys - keys_begin)];
 			currentHeight += 1;
 		}
 		int suffixIdx, endSuffixIdx = -1;
@@ -197,11 +203,18 @@ __global__ void kernel_find_words(const int threadsNum, HASH* keysArray, int* in
 			const int size = sizeArray[node];
 			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
 			const HASH *keys_end = keys_begin + size;
-			const HASH *keys = keys_begin;
-			while (keys < keys_end && *keys < key)
+			const HASH *keys;
+			while (keys_begin + 1 != keys_end)
 			{
-				++keys;
+				keys = keys_begin + ((keys_end - keys_begin) >> 1);
+				if (*keys <= key)
+					keys_begin = keys;
+				else
+					keys_end = keys;
 			}
+			keys = keys_begin;
+			keys_begin = keysArray + node * maxKeysPerNode;
+			keys_end = keys_begin + size;
 			if (keys < keys_end && *keys == key)
 			{
 				const int indexInKeyArray = keys - keys_begin;

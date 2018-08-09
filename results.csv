@@ -46,3 +46,52 @@ Date,Algorithm,GPU,Build time [ms],Sorting time [ms],Execution time [ms],Diction
 08/09/18 00:04:53;bplus_tree_gpu<unsigned __int64, 14> v1;GeForce GTX 960M;-nan(ind);-nan(ind);8.93984;408677;161431;0.992907
 08/09/18 00:04:53;bplus_tree_gpu<unsigned __int64, 16> v1;GeForce GTX 960M;-nan(ind);-nan(ind);9.51971;408677;161431;0.992907
 08/09/18 00:04:54;Thrust binary search;GeForce GTX 960M;21.6838;9.07722;7.18154;418914;161431;0.993254
+08/09/18 01:06:58;bplus_tree_gpu<unsigned __int64, 4> v2;GeForce GTX 960M;-nan(ind);-nan(ind);8.17363;408677;161431;0.992907
+08/09/18 01:06:59;bplus_tree_gpu<unsigned __int64, 8> v2;GeForce GTX 960M;-nan(ind);-nan(ind);7.16794;408677;161431;0.992907
+08/09/18 01:06:59;bplus_tree_gpu<unsigned __int64, 16> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.45597;408677;161431;0.992907
+08/09/18 01:07:00;bplus_tree_gpu<unsigned __int64, 32> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.21789;408677;161431;0.992907
+08/09/18 01:07:00;bplus_tree_gpu<unsigned __int64, 64> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.16435;408677;161431;0.992907
+08/09/18 01:07:00;bplus_tree_gpu<unsigned __int64, 128> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.97501;408677;161431;0.992907
+08/09/18 01:07:01;Thrust binary search;GeForce GTX 960M;19.0348;8.62825;7.19466;418914;161431;0.993254
+08/09/18 01:09:26;bplus_tree_gpu<unsigned __int64, 32> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.13011;408677;161431;0.992907
+08/09/18 01:09:26;bplus_tree_gpu<unsigned __int64, 64> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.1239;408677;161431;0.992907
+08/09/18 01:09:26;bplus_tree_gpu<unsigned __int64, 128> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.02531;408677;161431;0.992907
+08/09/18 01:09:27;bplus_tree_gpu<unsigned __int64, 256> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.68371;408677;161431;0.992907
+08/09/18 01:09:27;bplus_tree_gpu<unsigned __int64, 512> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.3016;408677;161431;0.992907
+08/09/18 01:09:27;bplus_tree_gpu<unsigned __int64, 1024> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.88266;408677;161431;0.992907
+08/09/18 01:09:28;Thrust binary search;GeForce GTX 960M;17.9609;8.56307;7.18106;418914;161431;0.993254
+08/09/18 01:09:56;bplus_tree_gpu<unsigned __int64, 32> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.02461;408677;161431;0.992907
+08/09/18 01:09:56;bplus_tree_gpu<unsigned __int64, 64> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.04634;408677;161431;0.992907
+08/09/18 01:09:56;bplus_tree_gpu<unsigned __int64, 128> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.85133;408677;161431;0.992907
+08/09/18 01:09:57;bplus_tree_gpu<unsigned __int64, 256> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.84627;408677;161431;0.992907
+08/09/18 01:09:57;bplus_tree_gpu<unsigned __int64, 512> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.91046;408677;161431;0.992907
+08/09/18 01:09:57;bplus_tree_gpu<unsigned __int64, 1024> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.64582;408677;161431;0.992907
+08/09/18 01:09:58;Thrust binary search;GeForce GTX 960M;16.7856;8.69837;7.20317;418914;161431;0.993254
+08/09/18 01:12:54;bplus_tree_gpu<unsigned __int64, 512> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.78509;408677;161431;0.992907
+08/09/18 01:12:55;bplus_tree_gpu<unsigned __int64, 1024> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.9359;408677;161431;0.992907
+08/09/18 01:12:55;bplus_tree_gpu<unsigned __int64, 2048> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.62842;408677;161431;0.992907
+08/09/18 01:12:55;bplus_tree_gpu<unsigned __int64, 4096> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.89875;408677;161431;0.992907
+08/09/18 01:12:56;bplus_tree_gpu<unsigned __int64, 8192> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.74246;408677;161431;0.992907
+08/09/18 01:12:56;bplus_tree_gpu<unsigned __int64, 16384> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.69651;408677;161431;0.992907
+08/09/18 01:12:57;Thrust binary search;GeForce GTX 960M;16.9254;8.35962;7.19571;418914;161431;0.993254
+08/09/18 01:13:00;bplus_tree_gpu<unsigned __int64, 512> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.46784;408677;161431;0.992907
+08/09/18 01:13:00;bplus_tree_gpu<unsigned __int64, 1024> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.04557;408677;161431;0.992907
+08/09/18 01:13:00;bplus_tree_gpu<unsigned __int64, 2048> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.8359;408677;161431;0.992907
+08/09/18 01:13:01;bplus_tree_gpu<unsigned __int64, 4096> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.8655;408677;161431;0.992907
+08/09/18 01:13:01;bplus_tree_gpu<unsigned __int64, 8192> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.59322;408677;161431;0.992907
+08/09/18 01:13:01;bplus_tree_gpu<unsigned __int64, 16384> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.99568;408677;161431;0.992907
+08/09/18 01:13:02;Thrust binary search;GeForce GTX 960M;18.2191;8.52186;7.20701;418914;161431;0.993254
+08/09/18 01:13:26;bplus_tree_gpu<unsigned __int64, 512> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.92787;408677;161431;0.992907
+08/09/18 01:13:27;bplus_tree_gpu<unsigned __int64, 1024> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.95536;408677;161431;0.992907
+08/09/18 01:13:27;bplus_tree_gpu<unsigned __int64, 2048> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.86918;408677;161431;0.992907
+08/09/18 01:13:27;bplus_tree_gpu<unsigned __int64, 4096> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.9671;408677;161431;0.992907
+08/09/18 01:13:28;bplus_tree_gpu<unsigned __int64, 8192> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.74707;408677;161431;0.992907
+08/09/18 01:13:28;bplus_tree_gpu<unsigned __int64, 16384> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.64765;408677;161431;0.992907
+08/09/18 01:13:29;Thrust binary search;GeForce GTX 960M;16.5778;7.40024;7.18688;418914;161431;0.993254
+08/09/18 01:13:31;bplus_tree_gpu<unsigned __int64, 512> v2;GeForce GTX 960M;-nan(ind);-nan(ind);6.32762;408677;161431;0.992907
+08/09/18 01:13:32;bplus_tree_gpu<unsigned __int64, 1024> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.83718;408677;161431;0.992907
+08/09/18 01:13:32;bplus_tree_gpu<unsigned __int64, 2048> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.76982;408677;161431;0.992907
+08/09/18 01:13:32;bplus_tree_gpu<unsigned __int64, 4096> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.90285;408677;161431;0.992907
+08/09/18 01:13:33;bplus_tree_gpu<unsigned __int64, 8192> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.884;408677;161431;0.992907
+08/09/18 01:13:33;bplus_tree_gpu<unsigned __int64, 16384> v2;GeForce GTX 960M;-nan(ind);-nan(ind);5.65885;408677;161431;0.992907
+08/09/18 01:13:34;Thrust binary search;GeForce GTX 960M;18.0561;8.27087;7.19446;418914;161431;0.993254
