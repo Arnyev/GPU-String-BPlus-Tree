@@ -22,6 +22,12 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, boo
 	for (auto dictIt = dictionaryArray.begin(); dictIt < dictionaryArray.end(); ++dictIt)
 	{
 		HASH newHash = get_hash<HASH>(&*dictIt, 0);
+		HASH cmp = get_hash_v2<HASH>(&*dictIt, 0);
+		if (newHash != cmp)
+		{
+			int x = 2;
+			//TODO delete
+		}
 		if (lastHash != newHash)
 		{
 			positions.push_back(pos);
@@ -69,8 +75,12 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, boo
 	{
 		concatedPositions.push_back(pos);
 		concated.append(str);
-		concated.push_back('\0');
-		pos += str.size() + 1;
+		const int mod = Version == 3 ? sizeof(uint32_t) : 
+						Version == 4 ? sizeof(uint4) :
+						1;
+		const int zeroes = mod == 1 ? 1 : mod - (str.size() % mod);
+		concated.insert(concated.end(), zeroes, '\0');
+		pos += str.size() + zeroes;
 	}
 	std::vector<bool> result = tree.template exist_word<Version>(concated.c_str(), concated.size(), concatedPositions.data(), concatedPositions.size());
 	std::cout << "Search done in " << std::setprecision(5) << tree.last_gpu_time() << " ms.\n";
@@ -96,7 +106,7 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, boo
 		}
 	}
 	std::stringstream stream;
-	stream << "bplus_tree_gpu<" << typeid(HASH).name() << ", " << PAGE_SIZE << "> v" << Version;
+	stream << "bplus_tree_gpu<" << typeid(HASH).name() << "; " << PAGE_SIZE << "> v" << Version;
 	append_to_csv(stream.str().c_str(), NAN, tree.last_gpu_time(), hashes.size(), result.size(), static_cast<float>(found) / result.size());
 	return;
 }

@@ -385,7 +385,278 @@ __global__ void kernel_find_words_v2(const int threadsNum, HASH* keysArray, int*
 	}
 }
 
+template <class HASH, int B>
+__global__ void kernel_find_words_v3(const int threadsNum, HASH* keysArray, int* indexesArray, int* sizeArray,
+                                  const int rootIndex, const int height, char* suffixes, int suffixesSize,
+                                  const int elementsNum, char* words, int* beginIndexes, bool* output)
+{
+	const int globalId = GetGlobalId();
+	const int maxIndexesPerNode = B + 1;
+	const int maxKeysPerNode = B;
+	int id = globalId;
+	while (id < elementsNum)
+	{
+		const int beginIdx = beginIndexes[id];
+		const HASH key = get_hash_v2<HASH>(words, beginIdx);
+		int currentHeight = 0;
+		int node = rootIndex;
+		//Inner nodes
+		while (currentHeight < height)
+		{
+			const int size = sizeArray[node];
+			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
+			const HASH *keys_end = keys_begin + size;
+			const HASH *keys;
+			while (keys_begin + 1 != keys_end)
+			{
+				keys = keys_begin + ((keys_end - keys_begin) >> 1);
+				if (*keys <= key)
+					keys_begin = keys;
+				else
+					keys_end = keys;
+			}
+			if (*keys_begin <= key)
+				++keys_begin;
+			node = indexesArray[node * maxIndexesPerNode + keys_begin - (keysArray + node * maxKeysPerNode)];
+			//node = indexesArray[node * maxIndexesPerNode + (keys - keys_begin)];
+			currentHeight += 1;
+		}
+		int suffixIdx, endSuffixIdx = -1;
+		//Leaf level
+		{
+			const int size = sizeArray[node];
+			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
+			const HASH *keys_end = keys_begin + size;
+			const HASH *keys;
+			while (keys_begin + 1 != keys_end)
+			{
+				keys = keys_begin + ((keys_end - keys_begin) >> 1);
+				if (*keys <= key)
+					keys_begin = keys;
+				else
+					keys_end = keys;
+			}
+			keys = keys_begin;
+			keys_begin = keysArray + node * maxKeysPerNode;
+			keys_end = keys_begin + size;
+			if (keys < keys_end && *keys == key)
+			{
+				const int indexInKeyArray = keys - keys_begin;
+				suffixIdx = indexesArray[node * maxIndexesPerNode + indexInKeyArray];
+				if (indexInKeyArray < size - 1) //Next element is in the same leaf
+				{
+					endSuffixIdx = indexesArray[node * maxIndexesPerNode + indexInKeyArray + 1];
+				}
+				else //Next element is in the next leaf
+				{
+					if (indexesArray[node * maxIndexesPerNode + maxIndexesPerNode - 1] != -1) //Next leaf exists
+					{
+						endSuffixIdx = indexesArray[(node + 1) * maxIndexesPerNode];
+					}
+					else //It is the last element in the last leaf
+					{
+						endSuffixIdx = suffixesSize;
+					}
+				}
+			}
+			else
+			{
+				suffixIdx = -1;
+			}
+		}
+		bool result = false;
+		if (suffixIdx < 0)
+		{
+			result = false;
+		}
+		else if (key & 0x1) //There is suffix to check
+		{
+			const char nullByte = static_cast<char>(0);
+			char *endSuffixIt = suffixes + endSuffixIdx;
+			for (char *suffixIt = suffixes + suffixIdx; suffixIt < endSuffixIt; ++suffixIt)
+			{
+				char *wordIt = words + beginIdx + chars_in_type<HASH>; //Pointer to suffix of the word
+				while (*suffixIt != nullByte && *wordIt != nullByte)
+				{
+					if (*suffixIt != *wordIt)
+						break;
+					++suffixIt;
+					++wordIt;
+				}
+				if (*suffixIt == nullByte && *wordIt == nullByte)
+				{
+					result = true;
+					break;
+				}
+				while (*suffixIt != nullByte)
+				{
+					++suffixIt;
+				}
+			}
+		}
+		else
+		{
+			result = true;
+		}
+		output[id] = result;
+		id += threadsNum;
+	}
+}
+
+template <class HASH, int B>
+__global__ void kernel_find_words_v4(const int threadsNum, HASH* keysArray, int* indexesArray, int* sizeArray,
+                                  const int rootIndex, const int height, char* suffixes, int suffixesSize,
+                                  const int elementsNum, char* words, int* beginIndexes, bool* output)
+{
+	const int globalId = GetGlobalId();
+	const int maxIndexesPerNode = B + 1;
+	const int maxKeysPerNode = B;
+	int id = globalId;
+	while (id < elementsNum)
+	{
+		const int beginIdx = beginIndexes[id];
+		const HASH key = get_hash_v3<HASH>(words, beginIdx);
+		int currentHeight = 0;
+		int node = rootIndex;
+		//Inner nodes
+		while (currentHeight < height)
+		{
+			const int size = sizeArray[node];
+			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
+			const HASH *keys_end = keys_begin + size;
+			const HASH *keys;
+			while (keys_begin + 1 != keys_end)
+			{
+				keys = keys_begin + ((keys_end - keys_begin) >> 1);
+				if (*keys <= key)
+					keys_begin = keys;
+				else
+					keys_end = keys;
+			}
+			if (*keys_begin <= key)
+				++keys_begin;
+			node = indexesArray[node * maxIndexesPerNode + keys_begin - (keysArray + node * maxKeysPerNode)];
+			//node = indexesArray[node * maxIndexesPerNode + (keys - keys_begin)];
+			currentHeight += 1;
+		}
+		int suffixIdx, endSuffixIdx = -1;
+		//Leaf level
+		{
+			const int size = sizeArray[node];
+			const HASH *keys_begin = keysArray + node * maxKeysPerNode;
+			const HASH *keys_end = keys_begin + size;
+			const HASH *keys;
+			while (keys_begin + 1 != keys_end)
+			{
+				keys = keys_begin + ((keys_end - keys_begin) >> 1);
+				if (*keys <= key)
+					keys_begin = keys;
+				else
+					keys_end = keys;
+			}
+			keys = keys_begin;
+			keys_begin = keysArray + node * maxKeysPerNode;
+			keys_end = keys_begin + size;
+			if (keys < keys_end && *keys == key)
+			{
+				const int indexInKeyArray = keys - keys_begin;
+				suffixIdx = indexesArray[node * maxIndexesPerNode + indexInKeyArray];
+				if (indexInKeyArray < size - 1) //Next element is in the same leaf
+				{
+					endSuffixIdx = indexesArray[node * maxIndexesPerNode + indexInKeyArray + 1];
+				}
+				else //Next element is in the next leaf
+				{
+					if (indexesArray[node * maxIndexesPerNode + maxIndexesPerNode - 1] != -1) //Next leaf exists
+					{
+						endSuffixIdx = indexesArray[(node + 1) * maxIndexesPerNode];
+					}
+					else //It is the last element in the last leaf
+					{
+						endSuffixIdx = suffixesSize;
+					}
+				}
+			}
+			else
+			{
+				suffixIdx = -1;
+			}
+		}
+		bool result = false;
+		if (suffixIdx < 0)
+		{
+			result = false;
+		}
+		else if (key & 0x1) //There is suffix to check
+		{
+			const char nullByte = static_cast<char>(0);
+			char *endSuffixIt = suffixes + endSuffixIdx;
+			for (char *suffixIt = suffixes + suffixIdx; suffixIt < endSuffixIt; ++suffixIt)
+			{
+				char *wordIt = words + beginIdx + chars_in_type<HASH>; //Pointer to suffix of the word
+				while (*suffixIt != nullByte && *wordIt != nullByte)
+				{
+					if (*suffixIt != *wordIt)
+						break;
+					++suffixIt;
+					++wordIt;
+				}
+				if (*suffixIt == nullByte && *wordIt == nullByte)
+				{
+					result = true;
+					break;
+				}
+				while (*suffixIt != nullByte)
+				{
+					++suffixIt;
+				}
+			}
+		}
+		else
+		{
+			result = true;
+		}
+		output[id] = result;
+		id += threadsNum;
+	}
+}
+
+
+
 #pragma endregion
+
+#pragma region kernel_version_selectors
+template <typename HASH, int B, int Version>
+struct kernel_version_selector
+{
+	static_assert(Version - Version != 0, "Selected version of kernel does not exist.");
+	static constexpr decltype(kernel_find_words_v1<HASH, B>) *kernel = nullptr;
+};
+
+template <typename HASH, int B>
+struct kernel_version_selector<HASH, B, 1>
+{
+	static constexpr decltype(kernel_find_words_v1<HASH, B>) *kernel = kernel_find_words_v1<HASH, B>;
+};
+
+template <typename HASH, int B>
+struct kernel_version_selector<HASH, B, 2>
+{
+	static constexpr decltype(kernel_find_words_v1<HASH, B>) *kernel = kernel_find_words_v2<HASH, B>;
+};
+
+template <typename HASH, int B>
+struct kernel_version_selector<HASH, B, 3>
+{
+	static constexpr decltype(kernel_find_words_v1<HASH, B>) *kernel = kernel_find_words_v3<HASH, B>;
+};
+
+template <typename HASH, int B>
+struct kernel_version_selector<HASH, B, 4>
+{
+	static constexpr decltype(kernel_find_words_v1<HASH, B>) *kernel = kernel_find_words_v4<HASH, B>;
+};
+#pragma endregion kernel_version_selectors
 
 template <class HASH, int B>
 class bplus_tree_gpu
@@ -544,8 +815,6 @@ template <class HASH, int B>
 template <int Version>
 std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wordsSize, int* beginIndexes, int indexesSize)
 {
-	constexpr int MAX_VERSION = 2;
-	static_assert(Version >= 1 || Version <= MAX_VERSION, "Selected version does not exist.");
 	const int elementNum = indexesSize;
 	char *d_words;
 	int *d_indexes;
@@ -562,22 +831,11 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wor
 
 	const int blocksNum = elementNum <= 32 ? 1 : 2;
 	const int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 512);
+	kernel_version_selector<HASH, B, Version>::kernel kernel_init(blocksNum, threadsNum)
+		(threadsNum, keysArray, indexesArray, sizeArray,
+			rootNodeIndex, height, suffixes, suffixesSize,
+			elementNum, d_words, d_indexes, d_output);
 
-	if (Version == 1)
-	{
-		kernel_find_words_v1<HASH, B> kernel_init(blocksNum, threadsNum)
-			(threadsNum, keysArray, indexesArray, sizeArray,
-			rootNodeIndex, height, suffixes, suffixesSize,
-			elementNum, d_words, d_indexes, d_output);
-	}
-	else if (Version == 2)
-	{
-		kernel_find_words_v2<HASH, B> kernel_init(blocksNum, threadsNum)
-			(threadsNum, keysArray, indexesArray, sizeArray,
-			rootNodeIndex, height, suffixes, suffixesSize,
-			elementNum, d_words, d_indexes, d_output);
-	}
-		
 	gpuErrchk(cudaGetLastError());
 
 	bool *output = new bool[elementNum];
