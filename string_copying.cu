@@ -27,7 +27,7 @@ __global__ void copy_suffixes_d(const char* words, const int* positions, const s
 void copy_suffixes(const thrust::device_vector<char>& words, const thrust::device_vector<int>& sorted_positions, const size_t word_count,
                    const thrust::device_vector<int>& suffix_positions, thrust::device_vector<char>& suffixes)
 {
-	STARTKERNEL(copy_suffixes_d, "Copying suffixes", word_count, words.data().get(), sorted_positions.data().get(),
+	STARTKERNEL(copy_suffixes_d, word_count, words.data().get(), sorted_positions.data().get(),
 		word_count, suffixes.data().get(), suffix_positions.data().get());
 }
 

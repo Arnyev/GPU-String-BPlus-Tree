@@ -91,14 +91,14 @@ __global__ void mark_singletons_d(const ullong* keys, int* flags, const int* des
 
 void flags_different_than_last(const device_vector<ullong>& keys, device_vector<int>& flags)
 {
-	STARTKERNEL(flag_different_than_last_d, "Flags different than last", keys.size(), keys.data().get(), flags.
+	STARTKERNEL(flag_different_than_last_d, keys.size(), keys.data().get(), flags.
 		data().get(), keys.size());
 }
 
 void create_hashes_with_seg(const device_vector<int>& positions, const device_vector<char>& chars,
 	device_vector<ullong>& keys, const device_vector<int>& segments, const int offset, const int segment_size, const int seg_chars)
 {
-	STARTKERNEL(create_hashes_with_seg_d, "Create hashes", positions.size(), chars.data().get(), positions.data().
+	STARTKERNEL(create_hashes_with_seg_d, positions.size(), chars.data().get(), positions.data().
 		get(), segments.data().get(), keys.data().get(), offset, CHARSTOHASH - seg_chars, KEYBITS - segment_size,
 		positions.size());
 }
@@ -106,7 +106,7 @@ void create_hashes_with_seg(const device_vector<int>& positions, const device_ve
 void mark_singletons(const device_vector<int>& positions, const device_vector<ullong>& keys,
 	const device_vector<int>& destinations, device_vector<int>& flags, device_vector<int>& output)
 {
-	STARTKERNEL(mark_singletons_d, "Marking singletons", positions.size(), keys.data().get(), flags.data().get(),
+	STARTKERNEL(mark_singletons_d, positions.size(), keys.data().get(), flags.data().get(),
 		destinations.data().get(), output.data().get(), positions.data().get(), positions.size());
 }
 

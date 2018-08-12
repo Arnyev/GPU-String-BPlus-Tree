@@ -65,7 +65,7 @@ inline void get_grid_data(const size_t word_count, unsigned& threads_x, unsigned
 	grid_z = static_cast<unsigned>(num_blocks);
 }
 
-#define STARTKERNEL(function,name,thread_count,...)														\
+#define STARTKERNEL(function,thread_count,...)														\
 {																										\
 	unsigned threads_x, grid_x, grid_y, grid_z;															\
 	get_grid_data(thread_count, threads_x, grid_x, grid_y, grid_z);										\
