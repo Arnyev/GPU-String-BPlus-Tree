@@ -91,15 +91,16 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="gpu_tests.cu" />
-    <CudaCompile Include="bplus_tree_gpu.cu" />
+    <CudaCompile Include="array_searching.cu" />
     <CudaCompile Include="sort_strings.cu" />
-    <CudaCompile Include="Main.cpp" />
-    <CudaCompile Include="tests.cpp" />
+    <CudaCompile Include="string_copying.cu" />
+    <CudaCompile Include="tests_tree.cu" />
+    <CudaCompile Include="tests_gpu.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="bplus_tree.cpp" />
-    <ClCompile Include="file_helper.cpp" />
+    <ClCompile Include="helper_functions.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="tests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bplus_tree.h" />
@@ -107,11 +108,11 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <ClInclude Include="bplus_tree_gpu.cuh" />
     <ClInclude Include="functions.h" />
     <ClInclude Include="gpu_helper.cuh" />
-    <ClInclude Include="gpu_test.cuh" />
+    <ClInclude Include="helpers.h" />
     <ClInclude Include="not_implemented.h" />
     <ClInclude Include="parameters.h" />
+    <ClInclude Include="preparing_tree.cuh" />
     <ClInclude Include="sort_helpers.cuh" />
-    <ClInclude Include="sort_strings.cuh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

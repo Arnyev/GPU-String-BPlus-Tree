@@ -1,15 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <CudaCompile Include="bplus_tree_gpu.cu" />
     <CudaCompile Include="sort_strings.cu" />
-    <CudaCompile Include="Main.cpp" />
-    <CudaCompile Include="tests.cpp" />
-    <CudaCompile Include="gpu_tests.cu" />
+    <CudaCompile Include="array_searching.cu" />
+    <CudaCompile Include="string_copying.cu" />
+    <CudaCompile Include="tests_tree.cu" />
+    <CudaCompile Include="tests_gpu.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="bplus_tree.cpp" />
-    <ClCompile Include="file_helper.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="tests.cpp" />
+    <ClCompile Include="helper_functions.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bplus_tree.h" />
@@ -18,9 +19,9 @@
     <ClInclude Include="gpu_helper.cuh" />
     <ClInclude Include="not_implemented.h" />
     <ClInclude Include="functions.h" />
-    <ClInclude Include="sort_strings.cuh" />
     <ClInclude Include="parameters.h" />
     <ClInclude Include="sort_helpers.cuh" />
-    <ClInclude Include="gpu_test.cuh" />
+    <ClInclude Include="preparing_tree.cuh" />
+    <ClInclude Include="helpers.h" />
   </ItemGroup>
 </Project>

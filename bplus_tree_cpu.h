@@ -4,7 +4,6 @@
 #include <iterator>
 #include <numeric>
 #include <array>
-
 #include "bplus_tree.h"
 #include "bplus_tree_gpu.cuh"
 #include "gpu_helper.cuh"
@@ -363,7 +362,7 @@ bool bplus_tree_cpu<HASH, B>::inner_insert(HASH& key, int& value, int node, int 
 template <class HASH, int B>
 void bplus_tree_cpu<HASH, B>::create_tree(HASH* keys, int* values, int size, const char* suffixes, int suffixesLength)
 {
-	reservedNodes = needed_nodes(size);
+	reservedNodes = needed_nodes<B>(size);
 	this->suffixes = std::vector<char>(suffixes, suffixes + suffixesLength);
 	indexesArray = std::vector<index_array>(reservedNodes);
 	keysArray = std::vector<key_array>(reservedNodes);

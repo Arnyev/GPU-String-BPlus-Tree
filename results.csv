@@ -69,3 +69,14 @@ Date,                   Algorithm,                  GPU,                        
 08/09/18 22:21:07,		B - Plus Tree search,		GeForce GTX 1050 Ti,		11.2988,		2.28966,		416290,		161431,		0.992907
 08/09/18 22:21:07,		Thrust binary search,		GeForce GTX 1050 Ti,		3.26861,		1.46579,		416290,		161431,		0.992907
 08/09/18 22:21:08,		Thrust binary search,		GeForce GTX 1050 Ti,		3.06995,		1.47069,		416290,		161431,		0.992907
+08/12/18 14:24:41,		bplus_tree_gpu<unsigned __int64, 4> v1,		GeForce GTX 1050 Ti,		5.89414,		3.30474,		416291,		161431,		0.992907
+08/12/18 14:24:42,		bplus_tree_gpu<unsigned __int64, 8> v1,		GeForce GTX 1050 Ti,		4.54963,		3.15213,		416291,		161431,		0.992907
+08/12/18 14:24:42,		bplus_tree_gpu<unsigned __int64, 16> v1,		GeForce GTX 1050 Ti,		4.52608,		3.58829,		416291,		161431,		0.992907
+08/12/18 14:24:43,		bplus_tree_gpu<unsigned __int64, 32> v1,		GeForce GTX 1050 Ti,		4.11136,		4.27725,		416291,		161431,		0.992907
+08/12/18 14:24:43,		bplus_tree_gpu<unsigned __int64, 512> v2,		GeForce GTX 1050 Ti,		4.50253,		2.13402,		416291,		161431,		0.992907
+08/12/18 14:24:44,		bplus_tree_gpu<unsigned __int64, 1024> v2,		GeForce GTX 1050 Ti,		4.81075,		1.97683,		416291,		161431,		0.992907
+08/12/18 14:24:44,		bplus_tree_gpu<unsigned __int64, 2048> v2,		GeForce GTX 1050 Ti,		4.15539,		1.94589,		416291,		161431,		0.992907
+08/12/18 14:24:44,		bplus_tree_gpu<unsigned __int64, 4096> v2,		GeForce GTX 1050 Ti,		4.28544,		1.94771,		416291,		161431,		0.992907
+08/12/18 14:24:45,		bplus_tree_gpu<unsigned __int64, 8192> v2,		GeForce GTX 1050 Ti,		3.99462,		1.94064,		416291,		161431,		0.992907
+08/12/18 14:24:45,		bplus_tree_gpu<unsigned __int64, 16384> v2,		GeForce GTX 1050 Ti,		4.15232,		1.97021,		416291,		161431,		0.992907
+08/12/18 14:24:46,		Thrust binary search,		GeForce GTX 1050 Ti,		2.74637,		1.44179,		416290,		161431,		0.992907

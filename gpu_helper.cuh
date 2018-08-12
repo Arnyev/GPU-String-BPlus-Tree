@@ -73,5 +73,5 @@ inline void get_grid_data(const size_t word_count, unsigned& threads_x, unsigned
 	const dim3 threads(threads_x, 1, 1);																\
 	const dim3 blocks(grid_x, grid_y, grid_z);															\
 	function kernel_init(blocks, threads) (__VA_ARGS__);												\
-	getLastCudaError(name " failed.");																	\
+	gpuErrchk(cudaGetLastError());																		\
 }

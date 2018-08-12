@@ -1,14 +1,7 @@
 #pragma once
-#include <vector>
-#include <cassert>
-#include <algorithm>
-
 #include "gpu_helper.cuh"
-#include "bplus_tree.h"
-#include "not_implemented.h"
-#include "parameters.h"
-#include "sort_helpers.cuh"
-#include <thrust/system/detail/generic/select_system.h>
+#include "preparing_tree.cuh"
+#include "helpers.h"
 
 struct output_create_leafs
 {
@@ -106,7 +99,8 @@ __global__ void kernel_create_leafs(const int threadsNum, const int elementNum, 
 }
 
 template<class HASH, int B, class Output>
-__global__ void kernel_get_value(const int threadsNum, const int elementNum, HASH* keysArray, int* sizeArray, int* indexesArray, HASH* toFind, int height, int rootIndex, Output* output)
+__global__ void kernel_get_value(const int threadsNum, const int elementNum, const HASH* keysArray,
+	const int* sizeArray, const int* indexesArray, const HASH* toFind, const int height, const int rootIndex, Output* output)
 {
 	only_gpu_assert();
 	const int globalId = GetGlobalId();
@@ -164,9 +158,9 @@ __global__ void kernel_get_value(const int threadsNum, const int elementNum, HAS
 #pragma region search_kernels
 
 template <class HASH, int B>
-__global__ void kernel_find_words_v1(const int threadsNum, HASH* keysArray, int* indexesArray, int* sizeArray,
-	const int rootIndex, const int height, char* suffixes, int suffixesSize,
-	const int elementsNum, char* words, int* beginIndexes, bool* output)
+__global__ void kernel_find_words_v1(const int threadsNum, const HASH* keysArray, const int* indexesArray, const int* sizeArray,
+	const int rootIndex, const int height, const char* suffixes, const int suffixesSize, const int elementsNum, const char* words,
+	const int* beginIndexes, bool* output)
 {
 	const int globalId = GetGlobalId();
 	const int maxIndexesPerNode = B + 1;
@@ -236,10 +230,10 @@ __global__ void kernel_find_words_v1(const int threadsNum, HASH* keysArray, int*
 		else if (key & 0x1) //There is suffix to check
 		{
 			const char nullByte = static_cast<char>(0);
-			char *endSuffixIt = suffixes + endSuffixIdx;
-			for (char *suffixIt = suffixes + suffixIdx; suffixIt < endSuffixIt; ++suffixIt)
+			const char *endSuffixIt = suffixes + endSuffixIdx;
+			for (const char *suffixIt = suffixes + suffixIdx; suffixIt < endSuffixIt; ++suffixIt)
 			{
-				char *wordIt = words + beginIdx + CHARSTOHASH; //Pointer to suffix of the word
+				const char *wordIt = words + beginIdx + CHARSTOHASH; //Pointer to suffix of the word
 				while (*suffixIt != nullByte && *wordIt != nullByte)
 				{
 					if (*suffixIt != *wordIt)
@@ -268,9 +262,9 @@ __global__ void kernel_find_words_v1(const int threadsNum, HASH* keysArray, int*
 }
 
 template <class HASH, int B>
-__global__ void kernel_find_words_v2(const int threadsNum, HASH* keysArray, int* indexesArray, int* sizeArray,
-                                  const int rootIndex, const int height, char* suffixes, int suffixesSize,
-                                  const int elementsNum, char* words, int* beginIndexes, bool* output)
+__global__ void kernel_find_words_v2(const int threadsNum, const HASH* keysArray, const int* indexesArray, const int* sizeArray,
+	const int rootIndex, const int height, const char* suffixes, const int suffixesSize, const int elementsNum, const char* words,
+	const int* beginIndexes, bool* output)
 {
 	const int globalId = GetGlobalId();
 	const int maxIndexesPerNode = B + 1;
@@ -354,10 +348,10 @@ __global__ void kernel_find_words_v2(const int threadsNum, HASH* keysArray, int*
 		else if (key & 0x1) //There is suffix to check
 		{
 			const char nullByte = static_cast<char>(0);
-			char *endSuffixIt = suffixes + endSuffixIdx;
-			for (char *suffixIt = suffixes + suffixIdx; suffixIt < endSuffixIt; ++suffixIt)
+			const char *endSuffixIt = suffixes + endSuffixIdx;
+			for (const char *suffixIt = suffixes + suffixIdx; suffixIt < endSuffixIt; ++suffixIt)
 			{
-				char *wordIt = words + beginIdx + chars_in_type<HASH>; //Pointer to suffix of the word
+				const char *wordIt = words + beginIdx + chars_in_type<HASH>; //Pointer to suffix of the word
 				while (*suffixIt != nullByte && *wordIt != nullByte)
 				{
 					if (*suffixIt != *wordIt)
@@ -390,273 +384,135 @@ __global__ void kernel_find_words_v2(const int threadsNum, HASH* keysArray, int*
 template <class HASH, int B>
 class bplus_tree_gpu
 {
-	float m_elapsedTime;
 public:
-	char* suffixes;
-	int suffixesSize;
-	int* indexesArray;
-	HASH* keysArray;
-	int* sizeArray;
-	HASH* minArray;
-	int reservedNodes;
+	thrust::device_vector<char> suffixes;
+	thrust::device_vector<int> indexes;
+	thrust::device_vector<HASH> keys;
+	thrust::device_vector<int> sizes;
+	thrust::device_vector<HASH> mins;
 	int usedNodes;
 	int rootNodeIndex;
 	int height;
-protected:
-	void create_tree(HASH* hashes, int* values, int size, const char* suffixes, int suffixesLength);
-	static int needed_nodes(int elemNum);
-public:
-	bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree);
-	bplus_tree_gpu(HASH* hashes, int* values, int size, const char *suffixes, int suffixesLength);
-	~bplus_tree_gpu();
+	void create_tree(const thrust::device_vector<char>& words, thrust::device_vector<int>& sorted_positions);
 
-	bool exist(HASH key);
-	std::vector<bool> exist(HASH* keys, int size);
+	void exist(const thrust::device_vector<HASH>& keys, int size, thrust::device_vector<bool>& output) const;
 
 	template<int Version>
-	std::vector<bool> exist_word(const char *words, int wordsSize, int *beginIndexes, int indexesSize);
+	void exist_word(const thrust::device_vector<char>& words, const thrust::device_vector<int>& indexes, thrust::device_vector<bool>& output) const;
 
-	int get_value(HASH key);
-	std::vector<int> get_value(HASH* keys, int size);
+	void get_value(const thrust::device_vector<HASH>& keys, int size, thrust::device_vector<bool>& output) const;
 
-	bool insert(HASH key, int value);
-
-	void bulk_insert(HASH* keys, int* values, int size);
-
-	int get_height();
-
-	float last_gpu_time() const;
+	int get_height() const;
 };
 
 template <class HASH, int B>
-void bplus_tree_gpu<HASH, B>::create_tree(HASH* hashes, int* values, int size, const char* suffixes, int suffixesLength)
+void bplus_tree_gpu<HASH, B>::create_tree(const thrust::device_vector<char>& words, thrust::device_vector<int>& sorted_positions)
 {
-	height = 0;
-	const int elementNum = size; //Number of hashes
-	reservedNodes = needed_nodes(size);
-	HASH* d_hashes;
-	int* d_values;
-	suffixesSize = suffixesLength;
-	cudaEvent_t startEvent, stopEvent;
-	gpuErrchk(cudaEventCreate(&startEvent));
-	gpuErrchk(cudaEventCreate(&stopEvent));
-	gpuErrchk(cudaEventRecord(startEvent));
-	gpuErrchk(cudaMalloc(&(this->suffixes), suffixesLength * sizeof(char)));
-	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
-	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
-	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
-	gpuErrchk(cudaMalloc(&minArray, reservedNodes * sizeof(HASH)));
-	gpuErrchk(cudaMalloc(&d_hashes, size * sizeof(HASH)));
-	gpuErrchk(cudaMalloc(&d_values, size* sizeof(int)));
-	gpuErrchk(cudaMemcpy(this->suffixes, suffixes, sizeof(char) * suffixesLength, cudaMemcpyHostToDevice)); //Suffixes are copied to this->suffixes
-	gpuErrchk(cudaMemcpy(d_hashes, hashes, sizeof(HASH) * size, cudaMemcpyHostToDevice)); //Keys are copied to d_hashes
-	gpuErrchk(cudaMemcpy(d_values, values, sizeof(int) * size, cudaMemcpyHostToDevice)); //Values are copied to d_values
+	thrust::device_vector<HASH> hashes;
+	thrust::device_vector<int> values;
 
-	int blocksNum = elementNum <= 32 ? 1 : 2;
-	int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 1024);
-	kernel_create_leafs<HASH, B> kernel_init(blocksNum, threadsNum) (threadsNum, elementNum, d_hashes, d_values, keysArray,
-	                                                                 sizeArray, indexesArray, minArray);
+	create_output(words, sorted_positions, hashes, values, suffixes);
+
+	const auto size = static_cast<int>(hashes.size());
+	height = 0;
+	const auto node_count = needed_nodes<B>(size);
+	indexes.resize(node_count*(B + 1));
+	keys.resize(node_count*B);
+	sizes.resize(node_count);
+	mins.resize(node_count);
+
+	int blocks_num = size <= 32 ? 1 : 2;
+	int threads_num = size <= 32 ? 32 : std::min(size / 2, 1024);
+
+	kernel_create_leafs<HASH, B> kernel_init(blocks_num, threads_num) (threads_num, size, hashes.data().get(),
+		values.data().get(), keys.data().get(), sizes.data().get(), indexes.data().get(), mins.data().get());
+
 	gpuErrchk(cudaGetLastError());
 
-	gpuErrchk(cudaFree(d_hashes));
-	int lastCreated = std::max(1, elementNum * 2 / B);
-	int beginIndex = 0;
-	int endIndex = lastCreated;
-	while (lastCreated != 1)
+	int last_created = std::max(1, size * 2 / B);
+	int begin_index = 0;
+	int end_index = last_created;
+	while (last_created != 1)
 	{
 		height += 1;
-		blocksNum = lastCreated <= 32 ? 1 : 2;
-		threadsNum = lastCreated <= 32 ? 32 : std::min(lastCreated / 2, 1024);
-		kernel_create_next_layer<HASH, B> kernel_init(blocksNum, threadsNum) (
-			threadsNum, beginIndex, endIndex, indexesArray, keysArray, sizeArray, minArray);
+
+		blocks_num = last_created <= 32 ? 1 : 2;
+		threads_num = last_created <= 32 ? 32 : std::min(last_created / 2, 1024);
+
+		kernel_create_next_layer<HASH, B> kernel_init(blocks_num, threads_num) (threads_num, begin_index, end_index,
+			indexes.data().get(), keys.data().get(), sizes.data().get(), mins.data().get());
+
 		gpuErrchk(cudaGetLastError());
-		lastCreated = std::max(1, lastCreated / (B / 2 + 1));
-		beginIndex = endIndex;
-		endIndex = endIndex + lastCreated;
+
+		last_created = std::max(1, last_created / (B / 2 + 1));
+		begin_index = end_index;
+		end_index = end_index + last_created;
 	}
-	gpuErrchk(cudaEventRecord(stopEvent));
-	gpuErrchk(cudaEventSynchronize(stopEvent));
-	gpuErrchk(cudaEventElapsedTime(&m_elapsedTime, startEvent, stopEvent));
-	rootNodeIndex = endIndex - 1;
-	usedNodes = endIndex;
+
+	rootNodeIndex = end_index - 1;
+	usedNodes = end_index;
 }
 
 template <class HASH, int B>
-bplus_tree_gpu<HASH, B>::bplus_tree_gpu(bplus_tree_gpu<HASH, B>& gTree)
-{
-	reservedNodes = gTree.reservedNodes;
-	usedNodes = gTree.usedNodes;
-	rootNodeIndex = gTree.rootNodeIndex;
-	height = gTree.height;
-	gpuErrchk(cudaMalloc(&indexesArray, reservedNodes * sizeof(HASH) * (B + 1)));
-	gpuErrchk(cudaMalloc(&keysArray, reservedNodes * sizeof(HASH) * B));
-	gpuErrchk(cudaMalloc(&sizeArray, reservedNodes * sizeof(int)));
-	gpuErrchk(cudaMemcpy(indexesArray, gTree.indexesArray, reservedNodes * sizeof(HASH) * (B + 1), cudaMemcpyDeviceToDevice));
-	gpuErrchk(cudaMemcpy(keysArray, gTree.keysArray, reservedNodes * sizeof(HASH) * B, cudaMemcpyDeviceToDevice));
-	gpuErrchk(cudaMemcpy(sizeArray, gTree.sizeArray, reservedNodes * sizeof(int), cudaMemcpyDeviceToDevice));
-	gpuErrchk(cudaMemcpy(minArray, gTree.minArray, reservedNodes * sizeof(HASH), cudaMemcpyDeviceToDevice));
-}
-
-template <class HASH, int B>
-bplus_tree_gpu<HASH, B>::bplus_tree_gpu(HASH* hashes, int* values, int size, const char *suffixes, int suffixesLength)
-{
-	create_tree(hashes, values, size, suffixes, suffixesLength);
-}
-
-template <class HASH, int B>
-bplus_tree_gpu<HASH, B>::~bplus_tree_gpu()
-{
-	gpuErrchk(cudaFree(indexesArray));
-	gpuErrchk(cudaFree(keysArray));
-	gpuErrchk(cudaFree(sizeArray));
-	gpuErrchk(cudaFree(minArray));
-}
-
-template <class HASH, int B>
-bool bplus_tree_gpu<HASH, B>::exist(HASH key)
-{
-	return exist(&key, 1)[0];
-}
-
-template <class HASH, int B>
-std::vector<bool> bplus_tree_gpu<HASH, B>::exist(HASH* keys, int size)
+void bplus_tree_gpu<HASH, B>::exist(const thrust::device_vector<HASH>& keys, const int size, thrust::device_vector<bool>& output) const
 {
 	const int elementNum = size;
-	HASH* d_keys;
-	bool *output = new bool[size];
-	bool* d_output;
-	gpuErrchk(cudaMalloc(&d_keys, size * sizeof(HASH)));
-	gpuErrchk(cudaMalloc(&d_output, size * sizeof(bool)));
-	gpuErrchk(cudaMemcpy(d_keys, keys, size * sizeof(HASH), cudaMemcpyHostToDevice));
+	output.resize(size);
 
 	const int blocksNum = elementNum <= 32 ? 1 : 2;
 	const int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 1024);
-	kernel_get_value<HASH, B> kernel_init(blocksNum, threadsNum) (threadsNum, elementNum, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
-	gpuErrchk(cudaGetLastError());
 
-	gpuErrchk(cudaMemcpy(output, d_output, size * sizeof(bool), cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaFree(d_output));
-	gpuErrchk(cudaFree(d_keys));
-	return std::vector<bool>(output, output + size);
+	kernel_get_value<HASH, B> kernel_init(blocksNum, threadsNum) (threadsNum, elementNum, this->keys.data().get(),
+		sizes.data().get(), indexes.data().get(), keys.data().get(), height, rootNodeIndex, output.data().get());
+
+	gpuErrchk(cudaGetLastError());
 }
 
 template <class HASH, int B>
 template <int Version>
-std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wordsSize, int* beginIndexes, int indexesSize)
+void bplus_tree_gpu<HASH, B>::exist_word(const thrust::device_vector<char>& words, const thrust::device_vector<int>& word_indexes, thrust::device_vector<bool>& output) const
 {
 	constexpr int MAX_VERSION = 2;
 	static_assert(Version >= 1 || Version <= MAX_VERSION, "Selected version does not exist.");
-	const int elementNum = indexesSize;
-	char *d_words;
-	int *d_indexes;
-	bool *d_output;
-	cudaEvent_t startEvent, stopEvent;
-	gpuErrchk(cudaEventCreate(&startEvent));
-	gpuErrchk(cudaEventCreate(&stopEvent));
-	gpuErrchk(cudaEventRecord(startEvent));
-	gpuErrchk(cudaMalloc(&d_indexes, indexesSize * sizeof(int)));
-	gpuErrchk(cudaMalloc(&d_words, wordsSize * sizeof(char)));
-	gpuErrchk(cudaMalloc(&d_output, indexesSize * sizeof(bool)));
-	gpuErrchk(cudaMemcpy(d_words, words, wordsSize * sizeof(char), cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMemcpy(d_indexes, beginIndexes, indexesSize * sizeof(int), cudaMemcpyHostToDevice));
 
-	const int blocksNum = elementNum <= 32 ? 1 : 2;
-	const int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 512);
-
-	if (Version == 1)
-	{
-		kernel_find_words_v1<HASH, B> kernel_init(blocksNum, threadsNum)
-			(threadsNum, keysArray, indexesArray, sizeArray,
-			rootNodeIndex, height, suffixes, suffixesSize,
-			elementNum, d_words, d_indexes, d_output);
-	}
-	else if (Version == 2)
-	{
-		kernel_find_words_v2<HASH, B> kernel_init(blocksNum, threadsNum)
-			(threadsNum, keysArray, indexesArray, sizeArray,
-			rootNodeIndex, height, suffixes, suffixesSize,
-			elementNum, d_words, d_indexes, d_output);
-	}
-		
-	gpuErrchk(cudaGetLastError());
-
-	bool *output = new bool[elementNum];
-	gpuErrchk(cudaMemcpy(output, d_output, elementNum * sizeof(bool), cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaFree(d_words));
-	gpuErrchk(cudaFree(d_indexes));
-	gpuErrchk(cudaFree(d_output));
-	gpuErrchk(cudaEventRecord(stopEvent));
-	gpuErrchk(cudaEventSynchronize(stopEvent));
-	gpuErrchk(cudaEventElapsedTime(&m_elapsedTime, startEvent, stopEvent));
-	std::vector<bool> v(output, output + elementNum);
-	delete[] output;
-	return v;
-}
-
-template <class HASH, int B>
-int bplus_tree_gpu<HASH, B>::get_value(HASH key)
-{
-	return get_value(&key, 1)[0];
-}
-
-template <class HASH, int B>
-std::vector<int> bplus_tree_gpu<HASH, B>::get_value(HASH* keys, int size)
-{
-	const int elementNum = size;
-	HASH* d_keys;
-	std::vector<int> output(size);
-	int* d_output;
-	gpuErrchk(cudaMalloc(&d_keys, size * sizeof(HASH)));
-	gpuErrchk(cudaMalloc(&d_output, size * sizeof(int)));
-	gpuErrchk(cudaMemcpy(d_keys, keys, size * sizeof(HASH), cudaMemcpyHostToDevice));
+	const int elementNum = static_cast<int>(word_indexes.size());
+	output.resize(elementNum);
 
 	const int blocksNum = elementNum <= 32 ? 1 : 2;
 	const int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 1024);
-	kernel_get_value<HASH, B> kernel_init(blocksNum, threadsNum) (threadsNum, elementNum, keysArray, sizeArray, indexesArray, d_keys, height, rootNodeIndex, d_output);
+
+	if (Version == 1)
+	{
+		kernel_find_words_v1<HASH, B> kernel_init(blocksNum, threadsNum)(threadsNum, keys.data().get(), indexes.data().get(),
+			sizes.data().get(), rootNodeIndex, height, suffixes.data().get(), static_cast<int>(suffixes.size()),
+			elementNum, words.data().get(), word_indexes.data().get(), output.data().get());
+	}
+	else if (Version == 2)
+	{
+		kernel_find_words_v2<HASH, B> kernel_init(blocksNum, threadsNum)(threadsNum, keys.data().get(), indexes.data().get(),
+			sizes.data().get(), rootNodeIndex, height, suffixes.data().get(), static_cast<int>(suffixes.size()),
+			elementNum, words.data().get(), word_indexes.data().get(), output.data().get());
+	}
+
 	gpuErrchk(cudaGetLastError());
-
-	gpuErrchk(cudaMemcpy(output.data(), d_output, size * sizeof(int), cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaFree(d_output));
-	gpuErrchk(cudaFree(d_keys));
-	return output;
 }
 
 template <class HASH, int B>
-bool bplus_tree_gpu<HASH, B>::insert(HASH key, int value)
+void bplus_tree_gpu<HASH, B>::get_value(const thrust::device_vector<HASH>& keys, const int size, thrust::device_vector<bool>& output) const
 {
-	throw not_implemented();
+	const int elementNum = size;
+	output.resize(size);
+
+	const int blocksNum = elementNum <= 32 ? 1 : 2;
+	const int threadsNum = elementNum <= 32 ? 32 : std::min(elementNum / 2, 1024);
+	kernel_get_value<HASH, B> kernel_init(blocksNum, threadsNum) (threadsNum, elementNum, this->keys.data().get(),
+		sizes.data().get(), indexes.data().get(), keys.data().get(), height, rootNodeIndex, output.data().get());
+
+	gpuErrchk(cudaGetLastError());
 }
 
 template <class HASH, int B>
-void bplus_tree_gpu<HASH, B>::bulk_insert(HASH* keys, int* values, int size)
-{
-	throw not_implemented();
-}
-
-template <class HASH, int B>
-int bplus_tree_gpu<HASH, B>::get_height()
+int bplus_tree_gpu<HASH, B>::get_height() const
 {
 	return height;
-}
-
-template <class HASH, int B>
-float bplus_tree_gpu<HASH, B>::last_gpu_time() const
-{
-	return m_elapsedTime;
-}
-
-template <class HASH, int B>
-int bplus_tree_gpu<HASH, B>::needed_nodes(int elemNum)
-{
-	if (elemNum < B)
-		return 1;
-	int pages = elemNum * 2 / B;
-	elemNum = pages;
-	while (elemNum > B + 1)
-	{
-		elemNum = elemNum / (B / 2 + 1);
-		pages += elemNum;
-	}
-	pages += 1;
-	return pages;
 }
