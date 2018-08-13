@@ -24,8 +24,12 @@ const dim3 blockDim;
 const dim3 gridDim;
 #endif
 
+#define GetLocalId() (blockDim.x * blockDim.y * blockDim.z + threadIdx.z * blockDim.x * blockDim.y + threadIdx.y * blockDim.x + threadIdx.x)
+
 #define GetGlobalId() ((blockIdx.x + blockIdx.y * static_cast<size_t>(gridDim.x) + static_cast<size_t>(gridDim.x) * gridDim.y * blockIdx.z)\
  * blockDim.x * blockDim.y * blockDim.z + threadIdx.z * blockDim.x * blockDim.y+ threadIdx.y * blockDim.x+ threadIdx.x)
+
+#define ThreadsInBlock() (blockDim.x * blockDim.y * blockDim.z)
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 

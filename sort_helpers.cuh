@@ -107,7 +107,6 @@ __device__ __host__ __inline__ typename std::enable_if<
 	constexpr uint32_t idx3word = 0x00'1F'00'00u;
 	constexpr uint32_t idx4word = 0x1F'00'00'00u;
 	const uint32_t *wordPtr = reinterpret_cast<const uint32_t*>(words + my_position);
-	bool end = false;
 	int i = 0;
 	while (i < chars_to_hash)
 	{
@@ -184,24 +183,20 @@ __device__ __host__ __inline__ typename std::enable_if<
 	std::is_integral<HASH>::value && (std::is_same<CHAR, char>::value || std::is_same<CHAR, unsigned char>::value) && (
 		chars_in_type<HASH> > 0), HASH>::type get_hash_v3(const CHAR* words, const int my_position)
 {
-	constexpr int chars_to_hash = chars_in_type<HASH>;
 	using UnHash = typename std::make_unsigned<HASH>::type;
-	constexpr int sizeOfLookup = sizeof(uint4);
 	UnHash hash = 0;
 	constexpr uint32_t idx1word = 0x00'00'00'1Fu;
 	constexpr uint32_t idx2word = 0x00'00'1F'00u;
 	constexpr uint32_t idx3word = 0x00'1F'00'00u;
 	constexpr uint32_t idx4word = 0x1F'00'00'00u;
-	const uint4 *wordPtr = reinterpret_cast<const uint4*>(words + my_position);
-	const uint4 pack4chars = *wordPtr;
+	const uint4 pack16chars = *reinterpret_cast<const uint4*>(words + my_position);
 	bool end = false;
-	int i = 0;
 	do
 	{
 #define checkNthChar(N, a)\
-			end = end || !(idx##N##word & pack4chars.##a);\
+			end = end || !(idx##N##word & pack16chars.##a);\
 			hash *= ALPHABETSIZE;\
-			hash += end ? 0 : ((idx##N##word & pack4chars.##a) >> (8 * (N - 1)));
+			hash += end ? 0 : ((idx##N##word & pack16chars.##a) >> (8 * (N - 1)));
 
 		checkNthChar(1, x);
 		checkNthChar(2, x);
@@ -218,7 +213,7 @@ __device__ __host__ __inline__ typename std::enable_if<
 		checkNthChar(1, w);
 #undef checkNthChar
 	} while (false);
-	end = end || !(idx2word & pack4chars.w);
+	end = end || !(idx2word & pack16chars.w);
 	hash <<= 1;
 	hash |= end ? 0x0 : 0x1;
 	return static_cast<HASH>(hash);

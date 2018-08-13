@@ -7,9 +7,43 @@
 #include <regex>
 #include <set>
 #include <sstream>
+#include "dictionary_reader.h"
+#include "book_reader.h"
 
 template<typename HASH, int PAGE_SIZE, int Version>
-void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, bool showMissingWords = false)
+void __test_gpu_tree_inner(const std::vector<HASH> &hashes, const std::vector<char> &dictSuffixes, const std::vector<int> &dictPos, const std::vector<char> &bookWords, const std::vector<int> &bookPos)
+{
+	bplus_tree_gpu<HASH, PAGE_SIZE> tree(hashes.data(), dictPos.data(), hashes.size(), dictSuffixes.data(), dictSuffixes.size());
+	std::cout << "Tree created in " << std::setprecision(5) << tree.last_gpu_time() << " ms.\n";
+	std::vector<bool> result = tree.template exist_word<Version>(bookWords.data(), bookWords.size(), bookPos.data(), bookPos.size());
+	std::cout << "Search done in " << std::setprecision(5) << tree.last_gpu_time() << " ms.\n";
+	auto found = std::count(result.begin(), result.end(), true);
+	auto missed = result.size() - found;
+	std::cout << "Found " << found << " out of " << result.size() << ". Missed " << missed << " words.\n"
+		<< std::setw(6) << std::setprecision(5) << static_cast<float>(found) / result.size() << "% of words were not found.\n";
+	std::stringstream stream;
+	stream << "bplus_tree_gpu<" << typeid(HASH).name() << "; " << PAGE_SIZE << "> v" << Version;
+	append_to_csv(stream.str().c_str(), NAN, tree.last_gpu_time(), hashes.size(), result.size(), static_cast<float>(found) / result.size());
+}
+
+template<typename HASH, int PAGE_SIZE, int Version>
+void test_gpu_tree(dictionary_reader &dictReader, book_reader &bookReader)
+{
+	const std::vector<HASH> &hashes = dictReader.get_hashes<HASH>();
+	auto tup = dictReader.get_suffixes<HASH>(1);
+	const std::vector<char> &suffixes = std::get<0>(tup);
+	const std::vector<int> &dictPos = std::get<1>(tup);
+	constexpr int align = Version == 3 || Version == 5 ? sizeof(uint32_t) : 
+		Version == 4 ? sizeof(uint4) :
+		1;
+	auto tup2 = bookReader.get_words(align);
+	const std::vector<char> &words = std::get<0>(tup2);
+	const std::vector<int> &bookPos = std::get<1>(tup2);
+	__test_gpu_tree_inner<HASH, PAGE_SIZE, Version>(hashes, suffixes, dictPos, words, bookPos);
+}
+
+template<typename HASH, int PAGE_SIZE, int Version>
+void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename)
 {
 	auto dictionaryArray = read_file_to_buffer(dictionaryFilename);
 	std::replace(dictionaryArray.begin(), dictionaryArray.end(), '\n', '\0');
@@ -22,12 +56,6 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, boo
 	for (auto dictIt = dictionaryArray.begin(); dictIt < dictionaryArray.end(); ++dictIt)
 	{
 		HASH newHash = get_hash<HASH>(&*dictIt, 0);
-		HASH cmp = get_hash_v2<HASH>(&*dictIt, 0);
-		if (newHash != cmp)
-		{
-			int x = 2;
-			//TODO delete
-		}
 		if (lastHash != newHash)
 		{
 			positions.push_back(pos);
@@ -75,7 +103,7 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, boo
 	{
 		concatedPositions.push_back(pos);
 		concated.append(str);
-		const int mod = Version == 3 ? sizeof(uint32_t) : 
+		const int mod = Version == 3 || Version == 5 ? sizeof(uint32_t) : 
 						Version == 4 ? sizeof(uint4) :
 						1;
 		const int zeroes = mod == 1 ? 1 : mod - (str.size() % mod);
@@ -88,25 +116,9 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename, boo
 	auto missed = result.size() - found;
 	std::cout << "Found " << found << " out of " << result.size() << ". Missed " << missed << " words.\n"
 		<< std::setw(6) << std::setprecision(5) << static_cast<float>(found) / result.size() << "% of words were not found.\n";
-	std::set<std::string> notFound;
-	for (int i = 0; i < words.size(); ++i)
-	{
-		if (!result[i])
-		{
-			notFound.insert(words[i]);
-		}
-	}
-	if (showMissingWords)
-	{
-		std::cout << "Words missing in dictionary:\n";
-		int i = 0;
-		for (auto &word : notFound)
-		{
-			std::cout << std::setw(3) << ++i << "| " << word << std::endl;
-		}
-	}
 	std::stringstream stream;
 	stream << "bplus_tree_gpu<" << typeid(HASH).name() << "; " << PAGE_SIZE << "> v" << Version;
 	append_to_csv(stream.str().c_str(), NAN, tree.last_gpu_time(), hashes.size(), result.size(), static_cast<float>(found) / result.size());
 	return;
 }
+

@@ -98,13 +98,17 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <CudaCompile Include="tests.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="book_reader.cpp" />
     <ClCompile Include="bplus_tree.cpp" />
+    <ClCompile Include="dictionary_reader.cpp" />
     <ClCompile Include="file_helper.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="book_reader.h" />
     <ClInclude Include="bplus_tree.h" />
     <ClInclude Include="bplus_tree_cpu.h" />
     <ClInclude Include="bplus_tree_gpu.cuh" />
+    <ClInclude Include="dictionary_reader.h" />
     <ClInclude Include="functions.h" />
     <ClInclude Include="gpu_helper.cuh" />
     <ClInclude Include="gpu_test.cuh" />
