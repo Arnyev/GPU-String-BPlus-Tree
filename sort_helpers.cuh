@@ -64,7 +64,7 @@ __device__ __host__ __inline__ typename std::enable_if<
 	std::is_integral<HASH>::value && (std::is_same<CHAR, char>::value || std::is_same<CHAR, unsigned char>::value) && (
 		chars_in_type<HASH> > 0), HASH>::type get_hash(const CHAR* words, const int my_position)
 {
-	const int chars_to_hash = chars_in_type<HASH>;
+	constexpr int chars_to_hash = chars_in_type<HASH>;
 
 	typename std::make_unsigned<HASH>::type hash = 0;
 	unsigned char last_bit = 1;
@@ -190,14 +190,11 @@ __device__ __host__ __inline__ typename std::enable_if<
 	constexpr uint32_t idx3word = 0x00'1F'00'00u;
 	constexpr uint32_t idx4word = 0x1F'00'00'00u;
 	const uint4 pack16chars = *reinterpret_cast<const uint4*>(words + my_position);
-	bool end = false;
 	do
 	{
 #define checkNthChar(N, a)\
-			end = end || !(idx##N##word & pack16chars.##a);\
 			hash *= ALPHABETSIZE;\
-			hash += end ? 0 : ((idx##N##word & pack16chars.##a) >> (8 * (N - 1)));
-
+			hash += (idx##N##word & pack16chars.##a) >> (8 * (N - 1));
 		checkNthChar(1, x);
 		checkNthChar(2, x);
 		checkNthChar(3, x);
@@ -213,8 +210,7 @@ __device__ __host__ __inline__ typename std::enable_if<
 		checkNthChar(1, w);
 #undef checkNthChar
 	} while (false);
-	end = end || !(idx2word & pack16chars.w);
 	hash <<= 1;
-	hash |= end ? 0x0 : 0x1;
+	hash |= (idx2word & pack16chars.w) ? 0x1 : 0x0;
 	return static_cast<HASH>(hash);
 }

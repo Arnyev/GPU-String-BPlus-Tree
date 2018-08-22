@@ -1,10 +1,7 @@
 ﻿#pragma once
 #include <vector>
-#include <cassert>
 #include <unordered_map>
 #include <string>
-#include <algorithm>
-#include "sort_helpers.cuh"
 
 class book_reader
 {

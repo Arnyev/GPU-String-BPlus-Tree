@@ -33,9 +33,7 @@ void test_gpu_tree(dictionary_reader &dictReader, book_reader &bookReader)
 	auto tup = dictReader.get_suffixes<HASH>(1);
 	const std::vector<char> &suffixes = std::get<0>(tup);
 	const std::vector<int> &dictPos = std::get<1>(tup);
-	constexpr int align = Version == 3 || Version == 5 ? sizeof(uint32_t) : 
-		Version == 4 ? sizeof(uint4) :
-		1;
+	constexpr int align = kernel_version_selector<HASH, PAGE_SIZE, Version>::wordsAlignment;
 	auto tup2 = bookReader.get_words(align);
 	const std::vector<char> &words = std::get<0>(tup2);
 	const std::vector<int> &bookPos = std::get<1>(tup2);
@@ -103,9 +101,7 @@ void test_gpu_tree(const char* dictionaryFilename, const char* bookFilename)
 	{
 		concatedPositions.push_back(pos);
 		concated.append(str);
-		const int mod = Version == 3 || Version == 5 ? sizeof(uint32_t) : 
-						Version == 4 ? sizeof(uint4) :
-						1;
+		const int mod = kernel_version_selector<HASH, PAGE_SIZE, Version>::wordsAlignment;
 		const int zeroes = mod == 1 ? 1 : mod - (str.size() % mod);
 		concated.insert(concated.end(), zeroes, '\0');
 		pos += str.size() + zeroes;

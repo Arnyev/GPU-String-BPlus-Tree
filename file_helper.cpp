@@ -111,6 +111,6 @@ void append_to_csv(const char* algorithm, const float build_time, const float ex
 	localtime_s(&timeinfo, &time);
 
 	outfile.open("results.csv", std::ios_base::app);
-	outfile << std::put_time(&timeinfo, "%c") << ",\t\t" << algorithm << ",\t\t" << props.name << ",\t\t" << build_time << ",\t\t" <<
-		execution_time << ",\t\t" << dict_size << ",\t\t" << input_size << ",\t\t" << existing_percentage << std::endl;
+	outfile << std::put_time(&timeinfo, "%c") << "," << algorithm << "," << props.name << "," << build_time << "," <<
+		execution_time << "," << dict_size << "," << input_size << "," << existing_percentage << std::endl;
 }

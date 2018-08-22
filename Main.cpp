@@ -14,24 +14,54 @@ int main(const int argc, char **argv)
 	int* test;//initialization to improve time testing accuracy
 	if (cudaMalloc(&test, 4 * 4))
 		return 0;
-	std::vector<int> s;
+	int iterations = 1;
+	if (argc > 1)
+	{
+		try
+		{
+			iterations = std::stoi(argv[1]);
+		}
+		catch(...)
+		{
+		}
+	}
 	dictionary_reader dict("dictionary_clean.txt");
-	book_reader book("olivertwist.txt");
-	test_gpu_tree<uint64_t, 4, 1>(dict, book);
-	test_gpu_tree<uint64_t, 4096, 2>(dict, book);
-	test_gpu_tree<uint64_t, 8192, 2>(dict, book);
-	test_gpu_tree<uint64_t, 16384, 2>(dict, book);
-	test_gpu_tree<uint64_t, 1024, 3>(dict, book);
-	test_gpu_tree<uint64_t, 2048, 3>(dict, book);
-	test_gpu_tree<uint64_t, 4096, 3>(dict, book);
-	test_gpu_tree<uint64_t, 8192, 3>(dict, book);
-	test_gpu_tree<uint64_t, 16384, 3>(dict, book);
-	test_gpu_tree<uint64_t, 1024, 4>(dict, book);
-	test_gpu_tree<uint64_t, 2048, 4>(dict, book);
-	test_gpu_tree<uint64_t, 4096, 4>(dict, book);
-	test_gpu_tree<uint64_t, 8192, 4>(dict, book);
-	test_gpu_tree<uint64_t, 16384, 4>(dict, book);
-	test_array_searching_book("dictionary_clean.txt", "oliverTwist.txt");
+	book_reader book("terminalCompromise.txt");
+	for (int i = 0; i < iterations; ++i)
+	{
+		//test_gpu_tree<uint64_t, 4, 1>(dict, book);
+		//test_gpu_tree<uint64_t, 4096, 2>(dict, book);
+		//test_gpu_tree<uint64_t, 8192, 2>(dict, book);
+		test_gpu_tree<uint64_t, 1024, 3>(dict, book);
+		test_gpu_tree<uint64_t, 2048, 3>(dict, book);
+		//test_gpu_tree<uint64_t, 4096, 3>(dict, book);
+		//test_gpu_tree<uint64_t, 8192, 3>(dict, book);
+		test_gpu_tree<uint64_t, 1024, 4>(dict, book);
+		test_gpu_tree<uint64_t, 2048, 4>(dict, book);
+		//test_gpu_tree<uint64_t, 4096, 4>(dict, book);
+		//test_gpu_tree<uint64_t, 8192, 4>(dict, book);
+		test_gpu_tree<uint64_t, 16, 5>(dict, book);
+		test_gpu_tree<uint64_t, 32, 5>(dict, book);
+		test_gpu_tree<uint64_t, 64, 5>(dict, book);
+		test_gpu_tree<uint64_t, 128, 5>(dict, book);
+		test_gpu_tree<uint64_t, 256, 5>(dict, book);
+		//test_gpu_tree<uint64_t, 512, 5>(dict, book);
+		//test_gpu_tree<uint64_t, 1024, 5>(dict, book);
+		//test_gpu_tree<uint64_t, 2048, 5>(dict, book);
+		//test_gpu_tree<uint64_t, 4096, 5>(dict, book);
+		//test_gpu_tree<uint64_t, 8192, 5>(dict, book);
+		test_gpu_tree<uint64_t, 16, 6>(dict, book);
+		test_gpu_tree<uint64_t, 32, 6>(dict, book);
+		test_gpu_tree<uint64_t, 64, 6>(dict, book);
+		test_gpu_tree<uint64_t, 128, 6>(dict, book);
+		test_gpu_tree<uint64_t, 256, 6>(dict, book);
+		//test_gpu_tree<uint64_t, 512, 6>(dict, book);
+		//test_gpu_tree<uint64_t, 1024, 6>(dict, book);
+		//test_gpu_tree<uint64_t, 2048, 6>(dict, book);
+		//test_gpu_tree<uint64_t, 4096, 6>(dict, book);
+		//test_gpu_tree<uint64_t, 8192, 6>(dict, book);
+		test_array_searching_book("dictionary_clean.txt", "terminalCompromise.txt");
+	}
 	return 0;
 	test_array_searching_book("dictionary.txt", "book.txt");
 

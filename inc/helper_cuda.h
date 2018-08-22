@@ -1273,7 +1273,7 @@ inline int findCudaDevice(int argc, const char **argv)
         devID = gpuGetMaxGflopsDeviceId();
         checkCudaErrors(cudaSetDevice(devID));
         checkCudaErrors(cudaGetDeviceProperties(&deviceProp, devID));
-        printf("GPU Device %d: \"%s\" with compute capability %d.%d\n\n and %d multiprocesors.", devID, deviceProp.name, deviceProp.major, deviceProp.minor, deviceProp.multiProcessorCount);
+        printf("GPU Device %d: \"%s\" with compute capability %d.%d and %d multiprocesors.\n\n", devID, deviceProp.name, deviceProp.major, deviceProp.minor, deviceProp.multiProcessorCount);
     }
 
     return devID;

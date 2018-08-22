@@ -31,6 +31,10 @@ const dim3 gridDim;
 
 #define ThreadsInBlock() (blockDim.x * blockDim.y * blockDim.z)
 
+#define GetLocalIdSlim() (threadIdx.x)
+
+#define GetGlobalIdSlim() (threadIdx.x + blockIdx.x * blockDim.x)
+
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true)
