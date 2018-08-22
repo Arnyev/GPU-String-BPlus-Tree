@@ -10,8 +10,8 @@
   <ItemGroup>
     <ClCompile Include="bplus_tree.cpp" />
     <ClCompile Include="file_helper.cpp" />
-    <ClCompile Include="dictionary_reader.cpp" />
     <ClCompile Include="book_reader.cpp" />
+    <ClCompile Include="dictionary_reader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bplus_tree.h" />

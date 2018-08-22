@@ -1,4 +1,4 @@
-﻿#include "dictionary_reader.h"
+#include "dictionary_reader.h"
 #include "gpu_test.cuh"
 
 dictionary_reader::dictionary_reader(const char* fileName)
@@ -18,3 +18,10 @@ dictionary_reader::dictionary_reader(const char* fileName)
 	return;
 }
 
+dictionary_reader::dictionary_reader(const std::string& fileName) : dictionary_reader(fileName.c_str())
+{
+}
+
+dictionary_reader::dictionary_reader(const std::string&& fileName) : dictionary_reader(fileName)
+{
+}

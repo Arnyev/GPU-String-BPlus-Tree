@@ -7,6 +7,8 @@
 
 using namespace std;
 
+void get_arguments(const int argc, char **argv, std::string &dictionary, std::string &book, int &iterations);
+
 int main(const int argc, char **argv)
 {
 	findCudaDevice(argc, const_cast<const char **>(argv));
@@ -14,19 +16,13 @@ int main(const int argc, char **argv)
 	int* test;//initialization to improve time testing accuracy
 	if (cudaMalloc(&test, 4 * 4))
 		return 0;
+
+	std::string book_file = "terminalCompromise.txt";
+	std::string dictionary_file = "dictionary_clean.txt";
 	int iterations = 1;
-	if (argc > 1)
-	{
-		try
-		{
-			iterations = std::stoi(argv[1]);
-		}
-		catch(...)
-		{
-		}
-	}
-	dictionary_reader dict("dictionary_clean.txt");
-	book_reader book("terminalCompromise.txt");
+	get_arguments(argc, argv, dictionary_file, book_file, iterations);
+	dictionary_reader dict(dictionary_file);
+	book_reader book(book_file);
 	for (int i = 0; i < iterations; ++i)
 	{
 		//test_gpu_tree<uint64_t, 4, 1>(dict, book);
@@ -71,3 +67,49 @@ int main(const int argc, char **argv)
 	cout << "Moby Dick" << endl;
 	test_book("book.txt");
 }
+
+void get_arguments(const int argc, char **argv, std::string &dictionary, std::string &book, int &iterations)
+{
+	constexpr char delimiter = '-';
+	const char dictionaryFlag[] = "dict";
+	const char bookFlag[] = "book";
+	const char iterationsFlag[] = "n";
+	for (int i = 1; i < argc; ++i)
+	{
+		char *it = argv[i];
+		char *pos = nullptr;
+		while (*it)
+		{
+			if (*it == delimiter)
+				pos = it;
+			++it;
+		}
+		if (pos != nullptr)
+		{
+			++pos;
+			char *word = std::strstr(pos, dictionaryFlag);
+			if (word != nullptr && *(word += std::extent<decltype(dictionaryFlag)>::value - 1) == '=')
+			{
+				++word;
+				dictionary.assign(word);
+				continue;
+			}
+			word = std::strstr(pos, bookFlag);
+			if (word != nullptr && *(word += std::extent<decltype(bookFlag)>::value - 1) == '=')
+			{
+				++word;
+				book.assign(word);
+				continue;
+			}
+			word = std::strstr(pos, iterationsFlag);
+			if (word != nullptr && *(word += std::extent<decltype(iterationsFlag)>::value - 1) == '=')
+			{
+				++word;
+				const int result = std::atoi(word);
+				if (result != 0)
+					iterations = result;
+			}
+		}
+	}
+}
+

@@ -20,6 +20,14 @@ book_reader::book_reader(const char* fileName)
 	return;
 }
 
+book_reader::book_reader(const std::string& fileName) : book_reader(fileName.c_str())
+{
+}
+
+book_reader::book_reader(const std::string&& fileName) : book_reader(fileName)
+{
+}
+
 std::tuple<const std::vector<char>&, const std::vector<int>&> book_reader::get_words(int align)
 {
 	assert(align >= 1);

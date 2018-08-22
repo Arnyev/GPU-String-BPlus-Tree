@@ -1,8 +1,9 @@
 ﻿#pragma once
 #include <vector>
 #include <algorithm>
-#include "sort_helpers.cuh"
 #include <unordered_map>
+
+#include "sort_helpers.cuh"
 
 class dictionary_reader
 {
@@ -11,24 +12,26 @@ class dictionary_reader
 	std::unordered_map<std::string, void*> hashes;
 public:
 	dictionary_reader(const char* fileName);
+	dictionary_reader(const std::string &fileName);
+	dictionary_reader(const std::string &&fileName);
 
 	template<typename HASH>
-	const std::vector<HASH>& get_hashes();
+	const std::vector<HASH>& get_hashes(bool useCache = true);
 	
 	template<typename HASH>
-	std::tuple<const std::vector<char>&, const std::vector<int>&> get_suffixes(int align);
+	std::tuple<const std::vector<char>&, const std::vector<int>&> get_suffixes(int align, bool useCache = true);
 };
 
 template <typename HASH>
-const std::vector<HASH>& dictionary_reader::get_hashes()
+const std::vector<HASH>& dictionary_reader::get_hashes(bool useCache)
 {
 	auto it = hashes.find(typeid(HASH).name());
-	if (it != hashes.end())
+	if (useCache && it != hashes.end())
 	{
 		return *reinterpret_cast<std::vector<HASH>*>(it->second);
 	}
 	auto b = hashes.emplace(std::string(typeid(HASH).name()), new std::vector<HASH>()).first->second;
-	std::vector<HASH> &result = *reinterpret_cast<std::vector<HASH>*>(hashes.emplace(std::string(typeid(HASH).name()), new std::vector<HASH>()).first->second);
+	std::vector<HASH>& result = *reinterpret_cast<std::vector<HASH>*>(hashes.emplace(std::string(typeid(HASH).name()), new std::vector<HASH>()).first->second);
 	result.resize(words.size());
 	std::transform(words.begin(), words.end(), result.begin(), [](std::string& str) -> HASH { return get_hash_v2<HASH>(str.c_str(), 0); });
 	result.resize(std::distance(result.begin(), std::unique(result.begin(), result.end())));
@@ -36,12 +39,12 @@ const std::vector<HASH>& dictionary_reader::get_hashes()
 }
 
 template <typename HASH>
-std::tuple<const std::vector<char>&,const std::vector<int>&> dictionary_reader::get_suffixes(int align)
+std::tuple<const std::vector<char>&, const std::vector<int>&> dictionary_reader::get_suffixes(int align, bool useCache)
 {
 	assert(align >= 1);
 	std::string name = std::to_string(align) + "&" + std::string(typeid(HASH).name());
 	auto it = suffixes.find(name);
-	if (it != suffixes.end())
+	if (useCache && it != suffixes.end())
 	{
 		return it->second;
 	}
