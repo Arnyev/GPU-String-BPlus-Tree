@@ -24,6 +24,7 @@ struct output_create_next_layer
 	int isRoot;
 };
 
+#pragma region build_tree_kernels
 template<class HASH, int B>
 __global__ void kernel_create_next_layer(const int threadsNum, const int beginIndex, const int endIndex, int* indexArray, HASH* keysArray, int* sizeArray, HASH *minArray)
 {
@@ -161,6 +162,7 @@ __global__ void kernel_get_value(const int threadsNum, const int elementNum, HAS
 		id += threadsNum;
 	}
 }
+#pragma endregion
 
 #pragma region search_kernels
 
@@ -867,6 +869,138 @@ __global__ void kernel_find_words_v6(const int threadsNum, HASH* keysArray, int*
 		output[id] = true;
 	}
 }
+
+template <class HASH, int B>
+__device__ __inline__ void get_leaf_node(const HASH* keysArray, const int* indexesArray, const int* sizeArray, const int height, const HASH key, int& node)
+{
+	const int max_indexes_per_node = B + 1;
+	const int max_keys_per_node = B;
+
+	for (int currentHeight = 0; currentHeight < height; currentHeight++)
+	{
+		const int size = sizeArray[node];
+		int start_index = node * max_keys_per_node;
+		int end_index = start_index + size;
+
+		while (start_index + 1 != end_index)
+		{
+			const int mid = end_index + start_index >> 1;
+			if (keysArray[mid] <= key)
+				start_index = mid;
+			else
+				end_index = mid;
+		}
+
+		if (keysArray[start_index] <= key)
+			++start_index;
+
+		node = indexesArray[start_index + node * (max_indexes_per_node - max_keys_per_node)];
+	}
+}
+
+template <class HASH, int B>
+__device__ __inline__ void find_suffix_indices(const HASH* keysArray, const int* indexesArray, const int* sizeArray,
+	const int suffixesSize, const HASH key, int node, int& suffix_idx, int& end_suffix_idx)
+{
+	const int max_indexes_per_node = B + 1;
+	const int max_keys_per_node = B;
+
+	const int size = sizeArray[node];
+	int start_index = node * max_keys_per_node;
+	int end_index = start_index + size;
+
+	int index;
+
+	while (start_index + 1 != end_index)
+	{
+		index = end_index + start_index >> 1;
+		if (keysArray[index] <= key)
+			start_index = index;
+		else
+			end_index = index;
+	}
+
+	index = start_index;
+	start_index = node * max_keys_per_node;
+	end_index = start_index + size;
+
+	if (index >= end_index || keysArray[index] != key)
+		return;
+
+	const int index_in_key_array = index - start_index;
+	suffix_idx = indexesArray[node * max_indexes_per_node + index_in_key_array];
+
+	if (index_in_key_array < size - 1)
+		//Next element is in the same leaf
+		end_suffix_idx = indexesArray[node * max_indexes_per_node + index_in_key_array + 1];
+	else
+		//Next element is in the next leaf
+		if (indexesArray[node * max_indexes_per_node + max_indexes_per_node - 1] != -1)
+			//Next leaf exists
+			end_suffix_idx = indexesArray[(node + 1) * max_indexes_per_node];
+		else
+			//It is the last element in the last leaf
+			end_suffix_idx = suffixesSize;
+}
+
+template <class HASH>
+__device__ __inline__ bool check_suffix(const char* suffixes, const char* words, const int begin_idx, int& suffix_idx, const int end_suffix_idx)
+{
+	const auto null_byte = static_cast<char>(0);
+	for (; suffix_idx < end_suffix_idx; ++suffix_idx)
+	{
+		int word_suffix_index = begin_idx + chars_in_type<HASH>;;
+		while (true)
+		{
+			const auto dict_char = suffixes[suffix_idx];
+			const auto word_char = words[word_suffix_index];
+			if (dict_char == null_byte && word_char == null_byte)
+				return true;
+
+			if (dict_char != word_char || dict_char == null_byte || word_char == null_byte)
+				break;
+
+			++word_suffix_index;
+			++suffix_idx;
+		}
+
+		while (suffixes[suffix_idx] != null_byte)
+			++suffix_idx;
+	}
+	return false;
+}
+
+template <class HASH, int B>
+__global__ void kernel_find_words_v7(const int threadsNum, const HASH* keysArray, const int* indexesArray, const int* sizeArray,
+								const int rootIndex, const int height, const char* suffixes, const int suffixesSize, const int elementsNum, const char* words,
+								const int* beginIndexes, bool* output)
+{
+	const int id = GetGlobalId();
+	if (id >= elementsNum)
+		return;
+
+	const int beginIdx = beginIndexes[id];
+	const HASH key = get_hash<HASH>(words, beginIdx);
+	int node = rootIndex;
+
+	get_leaf_node<HASH, B>(keysArray, indexesArray, sizeArray, height, key, node);
+
+	int suffix_idx;
+	int end_suffix_idx = -1;
+	find_suffix_indices<HASH, B>(keysArray, indexesArray, sizeArray, suffixesSize, key, node, suffix_idx, end_suffix_idx);
+
+	if (end_suffix_idx == -1)
+		return;//false
+
+	if (!(key & 0x1))
+	{
+		output[id] = true;
+		return;
+	}
+
+	output[id] = check_suffix<HASH>(suffixes, words, beginIdx, suffix_idx, end_suffix_idx);
+}
+
 #pragma endregion
 
 #pragma region kernel_version_selectors
@@ -918,6 +1052,13 @@ struct kernel_version_selector<HASH, B, 6>
 {
 	static constexpr decltype(kernel_find_words_v1<HASH, B>) *kernel = kernel_find_words_v6<HASH, B>;
 	static constexpr int wordsAlignment = sizeof(uint32_t);
+};
+
+template <typename HASH, int B>
+struct kernel_version_selector<HASH, B, 7>
+{
+	static constexpr decltype(kernel_find_words_v1<HASH, B>) *kernel = reinterpret_cast<decltype(kernel_find_words_v1<HASH, B>)*>(kernel_find_words_v7<HASH, B>);
+	static constexpr int wordsAlignment = 1;
 };
 
 #pragma endregion kernel_version_selectors
@@ -1087,10 +1228,10 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wor
 	bool *d_output;
 	cudaDeviceProp props;
 	gpuErrchk(cudaGetDeviceProperties(&props, 0));
-	const int threadsNum = Version == 6 ? 128 :
+	const int threadsNum = (Version == 6 || Version == 7) ? 128 :
 		Version == 5 ? 672 :
 		1024;
-	const int blocksNum = Version == 6 ? std::ceil(static_cast<float>(elementNum) / threadsNum) : std::round(props.multiProcessorCount * 2048.0 / threadsNum);
+	const int blocksNum = (Version == 7 || Version == 6) ? std::ceil(static_cast<float>(elementNum) / threadsNum) : std::round(props.multiProcessorCount * 2048.0 / threadsNum);
 	cudaEvent_t startEvent, preEvent, execEvent, postEvent;
 	gpuErrchk(cudaEventCreate(&startEvent));
 	gpuErrchk(cudaEventCreate(&preEvent));

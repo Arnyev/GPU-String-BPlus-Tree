@@ -43,6 +43,11 @@ int main(const int argc, char **argv)
 			test_gpu_tree<uint64_t, 64, 6>(dict, book, logger);
 			test_gpu_tree<uint64_t, 128, 6>(dict, book, logger);
 			test_gpu_tree<uint64_t, 256, 6>(dict, book, logger);
+			test_gpu_tree<uint64_t, 16, 7>(dict, book, logger);
+			test_gpu_tree<uint64_t, 32, 7>(dict, book, logger);
+			test_gpu_tree<uint64_t, 64, 7>(dict, book, logger);
+			test_gpu_tree<uint64_t, 128, 7>(dict, book, logger);
+			test_gpu_tree<uint64_t, 256, 7>(dict, book, logger);
 			std::cout << "Done " << i + 1 << " out of " << iterations << " iterations.\n";
 		}
 	}
