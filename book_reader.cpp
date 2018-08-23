@@ -1,5 +1,8 @@
-﻿#include "book_reader.h"
+﻿#include <cctype>
+
+#include "book_reader.h"
 #include "gpu_test.cuh"
+#include "functions.h"
 
 book_reader::book_reader(const char* fileName)
 {
@@ -28,17 +31,27 @@ book_reader::book_reader(const std::string&& fileName) : book_reader(fileName)
 {
 }
 
-std::tuple<const std::vector<char>&, const std::vector<int>&> book_reader::get_words(int align)
+size_t book_reader::words_count() const
+{
+	return words.size();
+}
+
+std::tuple<const std::vector<char>&, const std::vector<int>&> book_reader::get_words(int align, bool useCache)
 {
 	assert(align >= 1);
 	auto it = wordsOutput.find(align);
-	if (it != wordsOutput.end())
+	if (useCache && it != wordsOutput.end())
 	{
 		return it->second;
 	}
 	auto inserted = wordsOutput.emplace(align, std::make_tuple(std::vector<char>(), std::vector<int>()));
 	std::vector<char> &result = std::get<0>(inserted.first->second);
 	std::vector<int> &positions = std::get<1>(inserted.first->second);
+	if (!inserted.second)
+	{
+		result.clear();
+		positions.clear();
+	}
 	for (auto & word : words)
 	{
 		positions.emplace_back(result.size());

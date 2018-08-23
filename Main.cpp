@@ -7,7 +7,7 @@
 
 using namespace std;
 
-void get_arguments(const int argc, char **argv, std::string &dictionary, std::string &book, int &iterations);
+void get_arguments(const int argc, char **argv, std::string &dictionary, std::string &book, int &iterations, std::string &csv);
 
 int main(const int argc, char **argv)
 {
@@ -19,61 +19,57 @@ int main(const int argc, char **argv)
 
 	std::string book_file = "terminalCompromise.txt";
 	std::string dictionary_file = "dictionary_clean.txt";
+	std::string csv_file = "results.csv";
 	int iterations = 1;
-	get_arguments(argc, argv, dictionary_file, book_file, iterations);
-	dictionary_reader dict(dictionary_file);
-	book_reader book(book_file);
-	for (int i = 0; i < iterations; ++i)
+	get_arguments(argc, argv, dictionary_file, book_file, iterations, csv_file);
 	{
-		//test_gpu_tree<uint64_t, 4, 1>(dict, book);
-		//test_gpu_tree<uint64_t, 4096, 2>(dict, book);
-		//test_gpu_tree<uint64_t, 8192, 2>(dict, book);
-		test_gpu_tree<uint64_t, 1024, 3>(dict, book);
-		test_gpu_tree<uint64_t, 2048, 3>(dict, book);
-		//test_gpu_tree<uint64_t, 4096, 3>(dict, book);
-		//test_gpu_tree<uint64_t, 8192, 3>(dict, book);
-		test_gpu_tree<uint64_t, 1024, 4>(dict, book);
-		test_gpu_tree<uint64_t, 2048, 4>(dict, book);
-		//test_gpu_tree<uint64_t, 4096, 4>(dict, book);
-		//test_gpu_tree<uint64_t, 8192, 4>(dict, book);
-		test_gpu_tree<uint64_t, 16, 5>(dict, book);
-		test_gpu_tree<uint64_t, 32, 5>(dict, book);
-		test_gpu_tree<uint64_t, 64, 5>(dict, book);
-		test_gpu_tree<uint64_t, 128, 5>(dict, book);
-		test_gpu_tree<uint64_t, 256, 5>(dict, book);
-		//test_gpu_tree<uint64_t, 512, 5>(dict, book);
-		//test_gpu_tree<uint64_t, 1024, 5>(dict, book);
-		//test_gpu_tree<uint64_t, 2048, 5>(dict, book);
-		//test_gpu_tree<uint64_t, 4096, 5>(dict, book);
-		//test_gpu_tree<uint64_t, 8192, 5>(dict, book);
-		test_gpu_tree<uint64_t, 16, 6>(dict, book);
-		test_gpu_tree<uint64_t, 32, 6>(dict, book);
-		test_gpu_tree<uint64_t, 64, 6>(dict, book);
-		test_gpu_tree<uint64_t, 128, 6>(dict, book);
-		test_gpu_tree<uint64_t, 256, 6>(dict, book);
-		//test_gpu_tree<uint64_t, 512, 6>(dict, book);
-		//test_gpu_tree<uint64_t, 1024, 6>(dict, book);
-		//test_gpu_tree<uint64_t, 2048, 6>(dict, book);
-		//test_gpu_tree<uint64_t, 4096, 6>(dict, book);
-		//test_gpu_tree<uint64_t, 8192, 6>(dict, book);
-		test_array_searching_book("dictionary_clean.txt", "terminalCompromise.txt");
+		dictionary_reader dict(dictionary_file);
+		book_reader book(book_file);
+		csv_logger logger(csv_file);
+		for (int i = 0; i < iterations; ++i)
+		{
+			test_array_searching_book(dict, book, logger);
+			test_gpu_tree<uint64_t, 1024, 3>(dict, book, logger);
+			test_gpu_tree<uint64_t, 2048, 3>(dict, book, logger);
+			test_gpu_tree<uint64_t, 1024, 4>(dict, book, logger);
+			test_gpu_tree<uint64_t, 2048, 4>(dict, book, logger);
+			test_gpu_tree<uint64_t, 16, 5>(dict, book, logger);
+			test_gpu_tree<uint64_t, 32, 5>(dict, book, logger);
+			test_gpu_tree<uint64_t, 64, 5>(dict, book, logger);
+			test_gpu_tree<uint64_t, 128, 5>(dict, book, logger);
+			test_gpu_tree<uint64_t, 256, 5>(dict, book, logger);
+			test_gpu_tree<uint64_t, 16, 6>(dict, book, logger);
+			test_gpu_tree<uint64_t, 32, 6>(dict, book, logger);
+			test_gpu_tree<uint64_t, 64, 6>(dict, book, logger);
+			test_gpu_tree<uint64_t, 128, 6>(dict, book, logger);
+			test_gpu_tree<uint64_t, 256, 6>(dict, book, logger);
+			std::cout << "Done " << i + 1 << " out of " << iterations << " iterations.\n";
+		}
 	}
 	return 0;
-	test_array_searching_book("dictionary.txt", "book.txt");
-
-	cout << "Randoms" << endl;
-	test_random_strings();
-
-	cout << "Moby Dick" << endl;
-	test_book("book.txt");
 }
 
-void get_arguments(const int argc, char **argv, std::string &dictionary, std::string &book, int &iterations)
+
+template <typename ConstCharArray>
+inline bool assign_if_equal(char* pos, std::string &str, ConstCharArray &flag)
+{
+	char *word = std::strstr(pos, flag);
+	if (word != nullptr && *(word += std::extent<ConstCharArray>::value - 1) == '=')
+	{
+		++word;
+		str.assign(word);
+		return true;
+	}
+	return false;
+}
+
+void get_arguments(const int argc, char **argv, std::string &dictionary, std::string &book, int &iterations, std::string &csv)
 {
 	constexpr char delimiter = '-';
 	const char dictionaryFlag[] = "dict";
 	const char bookFlag[] = "book";
 	const char iterationsFlag[] = "n";
+	const char csvFlag[] = "csv";
 	for (int i = 1; i < argc; ++i)
 	{
 		char *it = argv[i];
@@ -87,21 +83,13 @@ void get_arguments(const int argc, char **argv, std::string &dictionary, std::st
 		if (pos != nullptr)
 		{
 			++pos;
-			char *word = std::strstr(pos, dictionaryFlag);
-			if (word != nullptr && *(word += std::extent<decltype(dictionaryFlag)>::value - 1) == '=')
-			{
-				++word;
-				dictionary.assign(word);
+			if (assign_if_equal(pos, dictionary, dictionaryFlag))
 				continue;
-			}
-			word = std::strstr(pos, bookFlag);
-			if (word != nullptr && *(word += std::extent<decltype(bookFlag)>::value - 1) == '=')
-			{
-				++word;
-				book.assign(word);
+			if (assign_if_equal(pos, book, bookFlag))
 				continue;
-			}
-			word = std::strstr(pos, iterationsFlag);
+			if (assign_if_equal(pos, csv, csvFlag))
+				continue;;
+			char* word = std::strstr(pos, iterationsFlag);
 			if (word != nullptr && *(word += std::extent<decltype(iterationsFlag)>::value - 1) == '=')
 			{
 				++word;

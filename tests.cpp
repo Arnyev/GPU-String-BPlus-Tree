@@ -6,6 +6,9 @@
 #include <helper_cuda.h>
 #include <cctype>
 #include <regex>
+#include "dictionary_reader.h"
+#include "book_reader.h"
+#include "csv_logger.h"
 
 using namespace std;
 
@@ -290,6 +293,55 @@ void get_cpu_result(const host_vector<uchar>& words_dictionary, const host_vecto
 	const unordered_set<string> dictionary(strings_dictionary.begin(), strings_dictionary.end());
 
 	std::cout << measure::execution(fill_result_vec, result, strings_book, dictionary) << "cpu microseconds taken finding result" << std::endl;
+}
+
+void test_array_searching_book(dictionary_reader &dictReader, book_reader &bookReader, csv_logger &logger)
+{
+	float preprocTime, execTime, postTime;
+	std::vector<int> positions_dict_std_vector;
+	std::vector<uchar> chars_dict_std_vector;
+	std::tie(positions_dict_std_vector, chars_dict_std_vector) = dictReader.get_words<uchar>();
+	host_vector<int> positions_dictionary_host(positions_dict_std_vector);
+	host_vector<uchar> words_dictionary_host(chars_dict_std_vector);
+
+	std::vector<int> positions_book_std_vector;
+	std::vector<uchar> chars_book_std_vector;
+
+	auto start = std::chrono::steady_clock::now();
+	auto book_result = bookReader.get_words(1);
+	host_vector<int> positions_book_host(std::get<1>(book_result));
+	host_vector<uchar> words_book_host(std::get<0>(book_result));
+	preprocTime = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count();
+
+	device_vector<bool> gpu_result;
+	vector<bool> cpu_result;
+
+	device_vector<int> positions_book;
+	device_vector<unsigned char> words;
+	device_vector<int> sorted_positions;
+
+	const auto build_time = measure::execution_gpu(prepare_for_search, positions_dictionary_host, words_dictionary_host,
+		positions_book_host, words_book_host, positions_book, words, sorted_positions);
+
+	execTime = measure::execution_gpu(find_if_strings_exist, positions_book, sorted_positions, words, gpu_result) / 1000;
+
+	//get_cpu_result(words_dictionary_host, words_book_host, positions_book_host, cpu_result);
+
+	//if (gpu_result.size() != cpu_result.size())
+	//	return false;
+
+	start = std::chrono::steady_clock::now();
+	auto vec_result = from_vector_dev(gpu_result);
+	postTime = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count();
+	//for (size_t i = 0; i < cpu_result.size(); i++)
+	//	if (cpu_result[i] != vec_result[i])
+	//		return false;
+
+	const int existing = std::count(vec_result.begin(), vec_result.end(), true);
+
+	const auto percent_existing = static_cast<double>(existing) / bookReader.words_count();
+
+	logger.append("Thrust binary search", build_time / 1000, preprocTime, execTime, postTime, dictReader.words_count(), bookReader.words_count(), percent_existing);
 }
 
 bool test_array_searching_book(const char* dictionary_filename, const char* book_filename)

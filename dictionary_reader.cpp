@@ -1,5 +1,6 @@
 #include "dictionary_reader.h"
 #include "gpu_test.cuh"
+#include "functions.h"
 
 dictionary_reader::dictionary_reader(const char* fileName)
 {
@@ -24,4 +25,9 @@ dictionary_reader::dictionary_reader(const std::string& fileName) : dictionary_r
 
 dictionary_reader::dictionary_reader(const std::string&& fileName) : dictionary_reader(fileName)
 {
+}
+
+size_t dictionary_reader::words_count() const
+{
+	return words.size();
 }

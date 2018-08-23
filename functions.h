@@ -1,6 +1,9 @@
 #pragma once
 
 #include "parameters.h"
+#include "dictionary_reader.h"
+#include "book_reader.h"
+#include "csv_logger.h"
 
 std::vector<char> read_file_to_buffer(const char* filepath);
 void read_file(const char* filepath, thrust::host_vector<int>& positions, thrust::host_vector<uchar>& words);
@@ -9,6 +12,7 @@ void get_sorted_positions(thrust::device_vector<int>& positions, const thrust::d
 void sort_positions_thrust(thrust::device_vector<int>& positions, const thrust::device_vector<uchar>& chars);
 bool test_random_strings();
 bool test_array_searching_book(const char* dictionary_filename, const char* book_filename);
+void test_array_searching_book(dictionary_reader &dictReader, book_reader &bookReader, csv_logger &logger);
 bool test_book(const char* filename);
 void test_gpu_tree_vectors(const char* dictionary_filename, const char* book_filename);
 void create_strings(const thrust::host_vector<uchar>& words_book, const thrust::host_vector<int>& positions_book, std::vector<std::string>& strings_book);

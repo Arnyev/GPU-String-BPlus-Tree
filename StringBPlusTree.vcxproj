@@ -110,6 +110,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   <ItemGroup>
     <ClCompile Include="book_reader.cpp" />
     <ClCompile Include="bplus_tree.cpp" />
+    <ClCompile Include="csv_logger.cpp" />
     <ClCompile Include="dictionary_reader.cpp" />
     <ClCompile Include="file_helper.cpp" />
   </ItemGroup>
@@ -118,6 +119,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <ClInclude Include="bplus_tree.h" />
     <ClInclude Include="bplus_tree_cpu.h" />
     <ClInclude Include="bplus_tree_gpu.cuh" />
+    <ClInclude Include="csv_logger.h" />
     <ClInclude Include="dictionary_reader.h" />
     <ClInclude Include="functions.h" />
     <ClInclude Include="gpu_helper.cuh" />

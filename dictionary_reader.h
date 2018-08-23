@@ -15,9 +15,14 @@ public:
 	dictionary_reader(const std::string &fileName);
 	dictionary_reader(const std::string &&fileName);
 
+	size_t words_count() const;
+
 	template<typename HASH>
 	const std::vector<HASH>& get_hashes(bool useCache = true);
 	
+	template<typename CharType>
+	std::tuple<std::vector<int>, std::vector<CharType>> get_words();
+
 	template<typename HASH>
 	std::tuple<const std::vector<char>&, const std::vector<int>&> get_suffixes(int align, bool useCache = true);
 };
@@ -30,12 +35,30 @@ const std::vector<HASH>& dictionary_reader::get_hashes(bool useCache)
 	{
 		return *reinterpret_cast<std::vector<HASH>*>(it->second);
 	}
-	auto b = hashes.emplace(std::string(typeid(HASH).name()), new std::vector<HASH>()).first->second;
-	std::vector<HASH>& result = *reinterpret_cast<std::vector<HASH>*>(hashes.emplace(std::string(typeid(HASH).name()), new std::vector<HASH>()).first->second);
+	auto inserted = hashes.emplace(std::string(typeid(HASH).name()), new std::vector<HASH>());
+	std::vector<HASH>& result = *reinterpret_cast<std::vector<HASH>*>(inserted.first->second);
+	if (!inserted.second)
+	{
+		result.clear();
+	}
 	result.resize(words.size());
 	std::transform(words.begin(), words.end(), result.begin(), [](std::string& str) -> HASH { return get_hash_v2<HASH>(str.c_str(), 0); });
 	result.resize(std::distance(result.begin(), std::unique(result.begin(), result.end())));
 	return result;
+}
+
+template <typename CharType>
+std::tuple<std::vector<int>, std::vector<CharType>> dictionary_reader::get_words()
+{
+	std::vector<CharType> l_words;
+	std::vector<int> positions;
+	for (std::string &str : words)
+	{
+		positions.emplace_back(l_words.size());
+		l_words.insert(l_words.end(), str.begin(), str.end());
+		l_words.emplace_back(static_cast<CharType>(0));
+	}
+	return std::make_tuple(positions, l_words);
 }
 
 template <typename HASH>
@@ -51,6 +74,11 @@ std::tuple<const std::vector<char>&, const std::vector<int>&> dictionary_reader:
 	auto inserted = suffixes.emplace(name, std::make_tuple(std::vector<char>(), std::vector<int>()));
 	std::vector<char> &result = std::get<0>(inserted.first->second);
 	std::vector<int> &positions = std::get<1>(inserted.first->second);
+	if (!inserted.second)
+	{
+		result.clear();
+		positions.clear();
+	}
 	HASH lastHash = 0;
 	for (auto & word : words)
 	{

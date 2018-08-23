@@ -12,6 +12,7 @@
     <ClCompile Include="file_helper.cpp" />
     <ClCompile Include="book_reader.cpp" />
     <ClCompile Include="dictionary_reader.cpp" />
+    <ClCompile Include="csv_logger.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bplus_tree.h" />
@@ -26,5 +27,6 @@
     <ClInclude Include="gpu_test.cuh" />
     <ClInclude Include="dictionary_reader.h" />
     <ClInclude Include="book_reader.h" />
+    <ClInclude Include="csv_logger.h" />
   </ItemGroup>
 </Project>

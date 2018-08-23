@@ -949,7 +949,7 @@ public:
 	std::vector<bool> exist(HASH* keys, int size);
 
 	template<int Version>
-	std::vector<bool> exist_word(const char *words, int wordsSize, const int *beginIndexes, int indexesSize);
+	std::vector<bool> exist_word(const char* words, int wordsSize, const int* beginIndexes, int indexesSize, float &preTime, float &execTime, float &postTime);
 
 	int get_value(HASH key);
 	std::vector<int> get_value(HASH* keys, int size);
@@ -1079,33 +1079,36 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist(HASH* keys, int size)
 
 template <class HASH, int B>
 template <int Version>
-std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wordsSize, const int* beginIndexes, int indexesSize)
+std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wordsSize, const int* beginIndexes, int indexesSize, float &preTime, float &execTime, float &postTime)
 {
 	const int elementNum = indexesSize;
 	char *d_words;
 	int *d_indexes;
 	bool *d_output;
-	cudaEvent_t startEvent, stopEvent;
-	gpuErrchk(cudaEventCreate(&startEvent));
-	gpuErrchk(cudaEventCreate(&stopEvent));
-	gpuErrchk(cudaMalloc(&d_indexes, indexesSize * sizeof(int)));
-	gpuErrchk(cudaMalloc(&d_words, wordsSize * sizeof(char)));
-	gpuErrchk(cudaMalloc(&d_output, indexesSize * sizeof(bool)));
-	gpuErrchk(cudaMemcpy(d_words, words, wordsSize * sizeof(char), cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMemcpy(d_indexes, beginIndexes, indexesSize * sizeof(int), cudaMemcpyHostToDevice));
-
 	cudaDeviceProp props;
 	gpuErrchk(cudaGetDeviceProperties(&props, 0));
 	const int threadsNum = Version == 6 ? 128 :
 		Version == 5 ? 672 :
 		1024;
 	const int blocksNum = Version == 6 ? std::ceil(static_cast<float>(elementNum) / threadsNum) : std::round(props.multiProcessorCount * 2048.0 / threadsNum);
-	gpuErrchk(cudaEventRecord(startEvent));
+	cudaEvent_t startEvent, preEvent, execEvent, postEvent;
+	gpuErrchk(cudaEventCreate(&startEvent));
+	gpuErrchk(cudaEventCreate(&preEvent));
+	gpuErrchk(cudaEventCreate(&execEvent));
+	gpuErrchk(cudaEventCreate(&postEvent));
+	gpuErrchk(cudaEventRecord(startEvent))
+	gpuErrchk(cudaMalloc(&d_indexes, indexesSize * sizeof(int)));
+	gpuErrchk(cudaMalloc(&d_words, wordsSize * sizeof(char)));
+	gpuErrchk(cudaMalloc(&d_output, indexesSize * sizeof(bool)));
+	gpuErrchk(cudaMemcpy(d_words, words, wordsSize * sizeof(char), cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(d_indexes, beginIndexes, indexesSize * sizeof(int), cudaMemcpyHostToDevice));
+
+	gpuErrchk(cudaEventRecord(preEvent));
 	kernel_version_selector<HASH, B, Version>::kernel kernel_init(blocksNum, threadsNum)
 		(threadsNum * blocksNum, keysArray, indexesArray, sizeArray,
 			rootNodeIndex, height, suffixes, suffixesSize,
 			elementNum, d_words, d_indexes, d_output);
-	gpuErrchk(cudaEventRecord(stopEvent));
+	gpuErrchk(cudaEventRecord(execEvent));
 
 	gpuErrchk(cudaGetLastError());
 
@@ -1114,8 +1117,11 @@ std::vector<bool> bplus_tree_gpu<HASH, B>::exist_word(const char* words, int wor
 	gpuErrchk(cudaFree(d_words));
 	gpuErrchk(cudaFree(d_indexes));
 	gpuErrchk(cudaFree(d_output));
-	gpuErrchk(cudaEventSynchronize(stopEvent));
-	gpuErrchk(cudaEventElapsedTime(&m_elapsedTime, startEvent, stopEvent));
+	gpuErrchk(cudaEventRecord(postEvent));
+	gpuErrchk(cudaEventSynchronize(postEvent));
+	gpuErrchk(cudaEventElapsedTime(&preTime, startEvent, preEvent));
+	gpuErrchk(cudaEventElapsedTime(&execTime, preEvent, execEvent));
+	gpuErrchk(cudaEventElapsedTime(&postTime, execEvent, postEvent));
 	std::vector<bool> v(output, output + elementNum);
 	delete[] output;
 	return v;

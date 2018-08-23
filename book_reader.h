@@ -12,6 +12,8 @@ public:
 	book_reader(const std::string &fileName);
 	book_reader(const std::string &&fileName);
 
-	std::tuple<const std::vector<char>&, const std::vector<int>&> get_words(int align);
+	size_t words_count() const;
+
+	std::tuple<const std::vector<char>&, const std::vector<int>&> get_words(int align, bool useCache = true);
 };
 
